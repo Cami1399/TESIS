@@ -37,8 +37,7 @@ resumir_filas_consola <- function(tabla) {
 # PARTE 1: CONSTRUCCION DE INDICADORES ORIGINALES
 
 # 1. RUTAS DE TESIS Y BIBLIOTECA PERSONAL DE R ---------------------------------
-# No cambia la carpeta de trabajo del proyecto abierto en RStudio.
-# Las bases originales de TESIS_CODE se abren en lectura y no se modifican.
+
 raiz_tesis <- "C:/Users/camil/OneDrive/Desktop/TESIS"
 if (!dir.exists(raiz_tesis)) stop("No existe la carpeta TESIS; revise raiz_tesis.")
 mostrar_etapa("1. Rutas del procesamiento", data.frame(
@@ -79,8 +78,7 @@ mostrar_etapa("2. Dependencias disponibles", data.frame(paquete = dependencias,
                                                         version = vapply(dependencias, function(x) as.character(utils::packageVersion(x)), character(1))))
 
 # 3. INSTALAR Y CARGAR enemduR ------------------------------------------------
-# Usa el paquete instalado. Si falta, instala la etiqueta concreta de GitHub
-# en la biblioteca personal de R; no busca un repositorio en otra carpeta.
+
 if (!requireNamespace("enemduR", quietly = TRUE)) {
   if (!requireNamespace("remotes", quietly = TRUE)) {
     install.packages("remotes", lib = biblioteca_local, dependencies = NA)
@@ -107,26 +105,24 @@ mostrar_etapa("3. Paquete analitico cargado", data.frame(paquete = "enemduR",
 # 4. FORMULAS Y DIFERENCIA ENTRE PAQUETE Y ADAPTACION --------------------------
 # Notacion: w_i=fexp; I(condicion)=1 si se cumple, 0 si no. Las sumas se toman
 # para el canton y anio. Las estimaciones usan todas las filas del diseno
-# nacional antes de estimar subpoblaciones. No son porcentajes sin ponderar.
+# nacional antes de estimar subpoblaciones. No son porcentajes sin ponderar
 #
 # 4.1 DESEMPLEO GENERAL: REGLAS YA IMPLEMENTADAS EN enemduR
-#   100 * sum(w_i * I(condact en 7,8)) / sum(w_i * I(condact en 1,...,8)).
-#   condact 1:6=ocupados; 7:8=desempleados; 1:8=PEA.
-#   El registro del paquete fija el universo laboral de 15 anios o mas.
+#   100 * sum(w_i * I(condact en 7,8)) / sum(w_i * I(condact en 1,...,8))
+#   condact 1:6=ocupados; 7:8=desempleados; 1:8=PEA
+#   El registro del paquete fija el universo laboral de 15 anios o mas
 #   Se usa enemdu_build_labor_flags(), la misma clasificacion que utiliza
 #   enemdu_kpi_employment(). Luego se estima su proporcion en la PEA con
-#   enemdu_survey_proportion() para no calcular otras tasas innecesarias.
-#   No se reconstruye condact desde preguntas crudas.
+#   enemdu_survey_proportion() para no calcular otras tasas innecesarias
+#   No se reconstruye condact desde preguntas crudas
 #
 # 4.2 POBREZA POR INGRESOS: CLASIFICACION DEL PAQUETE Y RUTA DE ESTE ANALISIS
-#   El paquete define pobre = I(ingreso per capita < linea de pobreza explicita).
-#   Funciones: enemdu_build_poverty_flags() y enemdu_kpi_income_poverty().
-#   No generan por si solas la linea oficial ni el IPC.
-#   En estas bases ya existe pobreza, entregada por INEC: 1=pobre, 0=no pobre.
+#   El paquete define pobre = I(ingreso per capita < linea de pobreza explicita)
+#   Funciones: enemdu_build_poverty_flags() y enemdu_kpi_income_poverty()
+#   En estas bases ya existe pobreza, entregada por INEC: 1=pobre, 0=no pobre
 #   ESTE SCRIPT usa esa variable, no recalcula lineas ni el ingreso:
-#   100 * sum(w_i * pobreza_i) / sum(w_i), en registros con pobreza 0/1.
-#   Esta ruta evita aplicar una unica linea de diciembre a toda la base anual.
-#   El denominador se estima con ENEMDU; no con la proyeccion externa del Excel.
+#   100 * sum(w_i * pobreza_i) / sum(w_i), en registros con pobreza 0/1
+#   El denominador se estima con la ENEMDU
 #
 # 4.3 INASISTENCIA 12-17: ADAPTACION PROPIA CON ESTIMADOR DEL PAQUETE
 #   100 * sum(w_i * I(12<=edad<=17 y p07=2)) /
@@ -138,28 +134,28 @@ mostrar_etapa("3. Paquete analitico cargado", data.frame(paquete = "enemduR",
 #
 # 4.4 NBI ADOLESCENTE: CONSTRUCCION DEL PAQUETE + SUBPOBLACION PROPIA
 #   El perfil del paquete construye comp1...comp5:
-#     comp1: piso en 7,8 o paredes en 6,7 (calidad de vivienda).
-#     comp2: 0 dormitorios o miembros/dormitorios >3 (hacinamiento).
+#     comp1: piso en 7,8 o paredes en 6,7 (calidad de vivienda)
+#     comp2: 0 dormitorios o miembros/dormitorios >3 (hacinamiento)
 #     comp3: privacion de saneamiento o agua, segun reglas del perfil:
-#       vi09 en 3,4,5; agua aceptable vi10 en 1,3 y vi10a en 1,2,3.
-#     comp4: presencia de un nino de 6-12 que no asiste a clases.
+#       vi09 en 3,4,5; agua aceptable vi10 en 1,3 y vi10a en 1,2,3
+#     comp4: presencia de un nino de 6-12 que no asiste a clases
 #     comp5: jefatura con <=2 anios de escolaridad aproximada y
 #       miembros/ocupados >3. Sin ocupados, el cociente se trata como infinito.
-#   El paquete suma knbi=comp1+...+comp5 y define nbi=I(knbi>=1).
-#   Si falta un componente, enemdu_build_nbi_flags() deja NBI como NA.
+#   El paquete suma knbi=comp1+...+comp5 y define nbi=I(knbi>=1)
+#   Si falta un componente, enemdu_build_nbi_flags() deja NBI como NA
 #   Luego nuestra adaptacion estima:
 #   100 * sum(w_i * I(12<=edad<=17) * nbi_i) /
-#         sum(w_i), sobre toda la poblacion del canton-anio.
+#         sum(w_i), sobre toda la poblacion del canton-anio
 #   Se usan enemdu_join_nbi_sources(), enemdu_build_nbi_components() y
-#   enemdu_build_nbi_flags(). El perfil disponible es enemdu_2025_anual.
-#   IMPORTANTE: la escolaridad de la jefatura es una aproximacion.
+#   enemdu_build_nbi_flags(). El perfil disponible es enemdu_2025_anual
+#   IMPORTANTE: la escolaridad de la jefatura es una aproximacion
 #   El helper de esta version asigna 0 si p10a=1; usa p10b si p10a<=2,
 #   6+p10b si p10a=3 y 12+p10b si p10a>=4 (con entradas disponibles).
 #   Esa aproximacion debe contrastarse con los niveles reales del cuestionario.
 #   Trasladar el perfil a 2021-2024 no esta validado. Se etiqueta PROVISIONAL.
 #   Estas son reglas implementadas en esta version, no certificacion INEC.
-#   El adolescente con NBI desconocido queda NA y se omite del calculo; el canton
-#   se conserva. Cuanto falto se informa en muestra_R. El denominador es la poblacion total del canton-anio.
+#   El adolescente con NBI desconocido queda NA y se omite del calculo; el canton se conserva
+#   El denominador es la poblacion total del canton-anio.
 #
 # 4.5 MONOPARENTALIDAD: FORMULA EXTERNA + APROXIMACION PROPIA
 #   Referencia publicada CDC/ATSDR, SVI 2018, pagina 15, EP_SNGPNT:
@@ -169,8 +165,7 @@ mostrar_etapa("3. Paquete analitico cargado", data.frame(paquete = "enemduR",
 #   jefatura (p04=1), ningun conyuge residente (p04=2) y algun hijo/a (p04=3)
 #   menor de 18. Se permiten otros convivientes. Una fila y un peso por hogar.
 #   100 * sum(w_h * proxy_h) / sum(w_h), en hogares clasificables.
-#   No identifica cuidado efectivo ni todos los nucleos secundarios. No debe
-#   confundirse con la medicion completa de un solo cuidador que se solicito.
+
 #
 # 4.7 PRECISION Y SALIDA
 #   enemdu_survey_proportion() utiliza survey y enemdu_evaluate_precision().
@@ -179,14 +174,14 @@ mostrar_etapa("3. Paquete analitico cargado", data.frame(paquete = "enemduR",
 #   El paquete aproxima n efectiva con n/deff; si falta deff, utiliza n.
 #   Los intervalos son Wald; pueden salir de 0-100 y no se recortan a escondidas.
 #   Una n expandida grande no reemplaza una muestra suficiente.
-#   Los cantones no son dominios de diseno garantizados: todo es exploratorio.
+#   Los cantones no son dominios de diseno garantizados.
 #   Ceros/unos muestrales se marcan sin_variacion_muestral, no certeza real.
 #   Fuente del codigo del paquete:
 #   https://github.com/yerovi84/enemduR/tree/v0.1.0-alpha.2/R
 #
 # 5. FUNCIONES PROPIAS DE LECTURA, VALIDACION Y CALCULO ------------------------
 
-# Adaptaciones del proyecto. No modifica funciones ni registros de enemduR.
+# Adaptaciones del proyecto. No modifica funciones de enemduR.
 # 5.1 Combina canton y anio para unir tablas sin depender del orden.
 clave_panel <- function(x) paste(x$codigo_canton, x$anio, sep = "_")
 # 5.2 Valida codigos y conserva ceros iniciales.
@@ -424,7 +419,7 @@ calcular_anio_panel <- function(fuente, objetivo, anio) {
                adolescentes_nbi_faltante = sum(ix & edad_ok & is.na(p$nbi)),
                personas_pobreza_faltante = sum(ix & is.na(p$pobreza_panel)))
   }))
-  # Conservar variables originales y columnas calculadas de interes en memoria.
+  # Conservar variables originales
   originales <- names(fuente$personas)
   derivadas <- c("labor_pea", "labor_desempleo", "inasistencia", "desempleo_panel",
                  "pobreza_panel", paste0("comp", 1:5), "knbi", "nbi", "nbi_adolescente")
@@ -445,8 +440,7 @@ poblacion_cantonal <- leer_territorios(raiz_tesis) %>%
 mostrar_etapa("6. Periodo y catalogo territorial", resumir_filas_consola(poblacion_cantonal))
 
 # 7. LECTURA DE MICRODATOS ----------------------------------------------------
-# Cada fila es una persona (o vivienda). Se conserva el pais completo para
-# declarar el diseno; los cantones del panel se seleccionan al estimar.
+# Cada fila es una persona (o vivienda)
 datos_por_anio <- anios_panel %>%
   set_names() %>%
   map(\(anio) {
@@ -501,13 +495,12 @@ mostrar_etapa("8. Personas por canton y anio", muestra_por_canton %>%
                 pivot_wider(names_from = anio, values_from = personas, names_prefix = "personas_") %>%
                 arrange(provincia, canton))
 
-# Estimadores originales: una fila por indicador, canton y anio (objeto de R).
+# Estimadores originales: una fila por indicador, canton y anio.
 # Porcentajes e intervalos en 0-100; error estandar en puntos porcentuales;
 # CV en porcentaje (100 * SE / estimacion), indefinido si la estimacion es 0.
 # muestra_denominador = registros validos del denominador de cada indicador:
 #   PERSONAS en inasistencia (adolescentes 12-17 con p07 = 1 o 2), desempleo (PEA),
-#   pobreza (personas con pobreza 0 o 1) y NBI (personas del canton-anio; se omiten
-#   los adolescentes sin dato de NBI);
+#   pobreza (personas con pobreza 0 o 1) y NBI (adolescentes del cantón y año analizados con dato válido de NBI),
 #   HOGARES en monoparentalidad (una fila por hogar clasificable).
 estimadores <- resultados_por_anio %>%
   map(\(x) x$indicadores %>%
@@ -569,7 +562,7 @@ if (isTRUE(exportar_tabla)) {
 
 # 10. ESTIMACIONES ORIGINALES EN EXCEL ----------------------------------------
 # Una fila por indicador, canton y anio: porcentaje, error estandar, IC95, CV,
-# n del denominador y grados de libertad. Sin suavizar. Es el insumo de la Parte 2.
+# n del denominador y grados de libertad. Sin suavizar. 
 if (isTRUE(exportar_tabla)) {
   writexl::write_xlsx(list(Estimaciones_originales = estimadores),
                       file.path(carpeta_salida, "estimaciones_originales.xlsx"))
@@ -579,8 +572,6 @@ if (isTRUE(exportar_tabla)) {
 
 
 # PARTE 2: ESTIMACION EN AREAS PEQUENAS (SUAVIZADO)
-
-# No lee archivos externos: usa los objetos que dejo la Parte 1 en memoria.
 #   estimadores           porcentaje, error estandar, IC, n y grados de libertad
 #                         por indicador, canton y anio (sin suavizar).
 #   indicadores_agregados indicadores originales (para conservar columnas y NA).
@@ -590,7 +581,7 @@ if (isTRUE(exportar_tabla)) {
 # Los pesos originales de la ENEMDU no se modifican: no hay calibracion. Los
 # cantones no son dominios de diseno y sus estimaciones directas son imprecisas;
 # por eso se aplica estimacion en areas pequenas sobre los indicadores ya
-# construidos. Auxiliares del modelo: solo provincia y anio (sin Censo).
+# construidos. Auxiliares del modelo: solo provincia y anio.
 # Orden: (12) marcas de precision, (13) suavizado del error estandar con una
 # funcion generalizada de la varianza (GVF), (14) Fay-Herriot, (15) salidas.
 # Fuentes verificadas de esta parte:
@@ -618,9 +609,7 @@ mostrar_etapa("Parte 2. Objetos recibidos de la Parte 1", tibble(
 # 11. LIBRERIA DE AREAS PEQUENAS -----------------------------------------------
 # sae: ajuste del modelo Fay-Herriot (sae::mseFH, REML) y error cuadratico medio
 # del valor suavizado. Fuente: Molina y Marhuenda (2015), The R Journal, 7(1).
-# Las demas librerias (dplyr, purrr, tidyr, tibble, writexl) ya se cargaron en la Parte 1.
-# No se usa library(sae): al adjuntarlo carga MASS, cuya funcion select() tapa a la
-# de dplyr y rompe select() mas adelante. Se llama siempre con el prefijo sae::.
+Se llama siempre con el prefijo sae::.
 if (!requireNamespace("sae", quietly = TRUE)) {
   install.packages("sae", lib = biblioteca_local, dependencies = NA)
 }
@@ -696,8 +685,7 @@ mostrar_etapa("13. Suavizado del error estandar (GVF)", diagnostico_varianza)
 # Si el dato del canton es confiable (V_i baja), g_i es alto y el resultado queda
 # cerca del dato original; si tiene poca muestra (V_i alta), se acerca al valor
 # esperado de su provincia y anio. x_i = provincia + anio. Estimacion REML con
-# sae::mseFH; si no converge, metodo FH. El valor suavizado NO sustituye al
-# original: cada uno tiene su Excel.
+# sae::mseFH; si no converge, metodo FH. 
 # Fuentes: Fay y Herriot (1979), el modelo; You (2021), por que suavizar la
 # varianza antes del modelo; Molina y Marhuenda (2015), sae::mseFH.
 ajustar_fay_herriot <- function(d) {
@@ -741,7 +729,6 @@ diagnostico_suavizado <- diagnostico_varianza %>%
 mostrar_etapa("14. Fay-Herriot por indicador", diagnostico_suavizado)
 
 # 15. TABLAS DE SALIDA ---------------------------------------------------------
-# Estimaciones: originales y suavizadas en la misma hoja. Solo claves y numeros.
 estimaciones_comparacion <- estimadores %>%
   left_join(suavizado, by = c("anio", "codigo_canton", "indicador")) %>%
   transmute(anio, codigo_provincia, provincia, codigo_canton, canton, indicador,
