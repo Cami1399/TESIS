@@ -185,3 +185,32 @@ writexl::write_xlsx(list(Data_maestra_cantonal = tabla_maestra_limpia),
 mostrar_etapa("Data maestra cantonal exportada", data.frame(
   archivo = archivo_salida, filas = nrow(tabla_maestra_limpia),
   columnas = ncol(tabla_maestra_limpia)))
+
+
+tabla_maestra_limpia
+
+----------------------------------------------------------
+# 1. PIVOTE DESDE tabla_maestra_limpia
+  anios_revision <- 2021:2025
+columnas_indicadores <- c("inasistencia_12_17_pct", "desempleo_pct", "pobreza_ingresos_pct", "adolescentes_nbi_sobre_total_provisional_pct", "monoparental_jefatura_aproximacion_pct")
+cantones_revision <- unique(tabla_maestra_limpia[, c("codigo_provincia", "provincia", "codigo_canton", "canton")])
+cantones_revision <- cantones_revision[order(cantones_revision$codigo_provincia, cantones_revision$codigo_canton), ]
+tabla_indicadores_pivote <- do.call(rbind, lapply(columnas_indicadores, function(indicador_actual) {
+  bloque <- cantones_revision
+  bloque$indicador <- indicador_actual
+  for (anio_actual in anios_revision) {
+    datos_anio <- tabla_maestra_limpia[tabla_maestra_limpia$anio == anio_actual, ]
+    posicion <- match(bloque$codigo_canton, datos_anio$codigo_canton)
+    bloque[[as.character(anio_actual)]] <- datos_anio[[indicador_actual]][posicion]
+  }
+  bloque
+}))
+rownames(tabla_indicadores_pivote) <- NULL
+# 2. FILAS CON ALGUN CERO
+valores_anuales <- as.matrix(tabla_indicadores_pivote[, as.character(anios_revision), drop = FALSE])
+tiene_cero <- rowSums(!is.na(valores_anuales) & valores_anuales == 0) > 0
+tabla_indicadores_con_ceros <- tabla_indicadores_pivote[tiene_cero, , drop = FALSE]
+rownames(tabla_indicadores_con_ceros) <- NULL
+# 3. VISUALIZAR
+View(tabla_indicadores_pivote)
+View(tabla_indicadores_con_ceros)

@@ -1,45 +1,42 @@
 # ============================================================================
-# PANEL CANTONAL 2021-2025: MUESTRA GENERAL Y PANEL DESBALANCEADO
+# INDICADORES CANTONALES 2021-2025: CONSTRUCCION (PARTE 1) Y SUAVIZADO (PARTE 2)
 # ============================================================================
-# Autor del paquete: yerovi84/enemduR. Version de referencia: v0.1.0-alpha.2.
-# Las funciones sin prefijo enemdu_ que aparecen abajo son adaptaciones propias.
-# Este script construye indicadores; ejecutar Data_Maestra.R despues.
-# Si enemduR no esta instalado, necesita el repositorio local o acceso a GitHub.
-# Resultados exploratorios: no se afirma validacion oficial del INEC.
-#
-# USO EN R/RSTUDIO:
-# Abra este archivo en su proyecto de RStudio y ejecute Source.
-# Para cambiar anios: definir anios_panel <- 2025 antes de source().
-# Para instalar/cargar y definir funciones sin calcular: solo_preparar <- TRUE.
-# Para volver a calcular despues: solo_preparar <- FALSE; ejecutar source().
-#
-# Retirar solamente los objetos de avisos de ejecuciones anteriores.
-rm(list = intersect(
-  c("advertencias_R", "aviso", "avisos_por_anio", "avisos_actuales"),
-  ls(envir = environment(), all.names = TRUE)),
-  envir = environment())
+# Paquete: yerovi84/enemduR (v0.1.0-alpha.2). Las funciones sin prefijo enemdu_
+# son adaptaciones propias.
+# Parte 1 (secciones 1-10): construye los indicadores originales con los pesos
+#   originales de la ENEMDU. Salidas: construccion_indicadores_factores.xlsx y
+#   estimaciones_originales.xlsx; objeto en R: estimadores.
+# Parte 2 (secciones 11-15): estimacion en areas pequenas sobre esos objetos.
+#   Salidas: estimaciones_original_vs_suavizado.xlsx e indicadores_suavizados.xlsx.
+# Para cambiar anios: definir anios_panel antes de source().
 
 # Salidas de seguimiento: solo consola; no altera ni filtra datos.
 mostrar_etapa <- function(titulo, tabla = NULL) {
-  cat("\n", titulo, "\n", sep = "")
+  print(paste0("--- ", titulo, " ---"))
   if (!is.null(tabla)) print(as.data.frame(tabla), row.names = FALSE)
   invisible(NULL)
 }
+# Cuenta, por indicador, cuantas celdas tienen valor, cuantas faltan y cuantas son cero.
 resumir_indicadores_consola <- function(tabla, columnas) {
-  data.frame(indicador = columnas, filas = nrow(tabla),
-             disponibles = vapply(tabla[, columnas, drop = FALSE], function(x) sum(is.finite(x)), integer(1)),
-             faltantes_o_no_finitos = vapply(tabla[, columnas, drop = FALSE], function(x) sum(!is.finite(x)), integer(1)),
-             ceros = vapply(tabla[, columnas, drop = FALSE], function(x) sum(is.finite(x) & x == 0), integer(1)))
+  tabla %>%
+    summarise(across(all_of(columnas), list(
+      disponibles = \(x) sum(is.finite(x)),
+      faltantes = \(x) sum(!is.finite(x)),
+      ceros = \(x) sum(is.finite(x) & x == 0)), .names = "{.col}|{.fn}")) %>%
+    pivot_longer(everything(), names_to = c("indicador", ".value"), names_sep = "\\|") %>%
+    mutate(filas = nrow(tabla), .after = indicador)
 }
+# Cuenta filas, cantones y provincias por anio en una tabla canton-anio.
 resumir_filas_consola <- function(tabla) {
-  anios <- sort(unique(tabla$anio))
-  do.call(rbind, lapply(anios, function(a) {
-    x <- tabla[tabla$anio == a, , drop = FALSE]
-    data.frame(anio = a, filas = nrow(x), cantones = length(unique(x$codigo_canton)),
-               provincias = length(unique(x$codigo_provincia)))
-  }))
+  tabla %>%
+    group_by(anio) %>%
+    summarise(filas = n(), cantones = n_distinct(codigo_canton),
+              provincias = n_distinct(codigo_provincia))
 }
 
+# ============================================================================
+# PARTE 1: CONSTRUCCION DE INDICADORES ORIGINALES
+# ============================================================================
 # 1. RUTAS DE TESIS Y BIBLIOTECA PERSONAL DE R ---------------------------------
 # No cambia la carpeta de trabajo del proyecto abierto en RStudio.
 # Las bases originales de TESIS_CODE se abren en lectura y no se modifican.
@@ -68,8 +65,9 @@ if (getRversion() < "4.2.0") stop("enemduR requiere R >= 4.2.0.")
 # survey: estimacion con UPM, estrato y pesos; errores e intervalos.
 # tibble: tablas de salida del paquete.
 # readxl: lectura de los dos Excel cantonales y de diccionarios.
-# writexl: exportacion de la tabla final como Excel, en una sola hoja.
-dependencias <- c("glue", "haven", "janitor", "readr", "rlang", "survey", "tibble", "readxl", "writexl", "dplyr")
+# writexl: exportacion de las tablas finales como Excel.
+# dplyr, tidyr, purrr: manipulacion de tablas con el pipe %>%.
+dependencias <- c("glue", "haven", "janitor", "readr", "rlang", "survey", "tibble", "readxl", "writexl", "dplyr", "tidyr", "purrr")
 options(repos = c(CRAN = "https://cloud.r-project.org"), timeout = 600)
 for (paquete in dependencias) {
   if (!requireNamespace(paquete, quietly = TRUE)) {
@@ -92,12 +90,15 @@ if (!requireNamespace("enemduR", quietly = TRUE)) {
                           lib = biblioteca_local, dependencies = NA, upgrade = "never", build_vignettes = FALSE)
 }
 if (!requireNamespace("enemduR", quietly = TRUE)) stop("No se pudo instalar enemduR.")
-library(enemduR)
-library(readxl)
-library(readr)
-library(survey)
-library(tibble)
-library(writexl)
+library(enemduR)  # calcula el indicador ponderado con el diseno de la ENEMDU
+library(readxl)   # lee los Excel cantonales
+library(readr)    # lee los CSV de las bases anuales
+library(survey)   # diseno muestral: errores estandar e intervalos
+library(tibble)   # tablas de consola
+library(writexl)  # exporta los Excel de salida
+library(dplyr)    # manipulacion de tablas y pipe %>%
+library(tidyr)    # formato largo a ancho
+library(purrr)    # map() por anio e indicador
 # glue, haven, janitor y rlang son importaciones internas del paquete. No hace
 # falta adjuntarlas con library(); se comprobaron e instalaron en la seccion 2.
 
@@ -158,6 +159,8 @@ mostrar_etapa("3. Paquete analitico cargado", data.frame(paquete = "enemduR",
 #   Esa aproximacion debe contrastarse con los niveles reales del cuestionario.
 #   Trasladar el perfil a 2021-2024 no esta validado. Se etiqueta PROVISIONAL.
 #   Estas son reglas implementadas en esta version, no certificacion INEC.
+#   El adolescente con NBI desconocido queda NA y se omite del calculo; el canton
+#   se conserva. Cuanto falto se informa en muestra_R. El denominador es la poblacion total del canton-anio.
 #
 # 4.5 MONOPARENTALIDAD: FORMULA EXTERNA + APROXIMACION PROPIA
 #   Referencia publicada CDC/ATSDR, SVI 2018, pagina 15, EP_SNGPNT:
@@ -351,7 +354,7 @@ estimar_panel <- function(d, valor, indicador, objetivo, anio, estado_metodo) {
   # Pobreza por ingresos: sin personas con pobreza=0 o 1 no hay denominador.
   # Monoparentalidad: sin hogares clasificables por el proxy no hay denominador.
   # La ausencia de registros no demuestra ausencia del fenomeno en el canton.
-  # NBI conserva su tratamiento anterior; no se agrega aqui una regla para NBI.
+  # NBI: no lleva regla de denominador aqui; el adolescente sin dato se omite.
   revisar_denominador <- indicador %in% c("desempleo_general",
                                           "inasistencia_12_17", "pobreza_ingresos", "monoparental_jefatura_aproximacion")
   for (k in seq_len(nrow(salida))) {
@@ -397,9 +400,8 @@ calcular_anio_panel <- function(fuente, objetivo, anio) {
   p <- enemdu_build_nbi_components(p, profile = "enemdu_2025_anual", strict = TRUE)
   p <- enemdu_build_nbi_flags(p)
   p$nbi_adolescente <- ifelse(is.na(p$p03), NA_integer_, ifelse(edad_ok, p$nbi, 0L))
-  # Denominador total: no reducirlo silenciosamente si falta clasificar un caso.
-  cantones_nbi_incompleto <- unique(p$codigo_canton[is.na(p$nbi_adolescente)])
-  p$nbi_adolescente[p$codigo_canton %in% cantones_nbi_incompleto] <- NA_integer_
+  # El adolescente sin NBI queda NA y se omite del calculo (denominador total).
+  # El canton se conserva; su faltante se informa en muestra_R.
   h <- clasificar_jefatura(p)
   bloques <- list(
     estimar_panel(p, "inasistencia", "inasistencia_12_17", objetivo, anio, "derivado_p03_p07_codigos_1_2"),
@@ -432,468 +434,345 @@ calcular_anio_panel <- function(fuente, objetivo, anio) {
        personas_calculadas = p, hogares_calculados = h)
 }
 # 6. PARAMETROS ---------------------------------------------------------------
-# Estos parametros se pueden definir antes de source().
-if (!exists("solo_preparar")) solo_preparar <- FALSE
-if (!isTRUE(solo_preparar)) {
-  # raiz_tesis se define en la seccion 1, sin depender de ejecuciones anteriores.
-  if (!exists("anios_panel")) anios_panel <- 2021:2025
-  # Filtro general por canton-anio; incluye exactamente 60 registros.
-  # No reemplaza la evaluacion de muestra/precision de cada indicador.
-  muestra_general_minima <- 60L
-  dir.create(file.path(raiz_tesis, "DATAS_PROCESADAS"), recursive = TRUE, showWarnings = FALSE)
-  # Dos exportaciones solicitadas: tabla completa y tabla limpia. FALSE permite revisar objetos sin escribir.
-  if (!exists("exportar_tabla")) exportar_tabla <- TRUE
-  stopifnot(all(anios_panel %in% 2021:2025))
-  opciones_encuesta <- options(survey.lonely.psu = "adjust", survey.adjust.domain.lonely = TRUE)
-  tryCatch({
-    
-    # 7. EXTRAER COLUMNAS ORIGINALES Y CREAR LOS DATA FRAMES --------------------
-    # Cada fila sigue siendo una observacion de persona, no un canton.
-    # Se conserva el pais completo para declarar correctamente el diseno.
-    # Solo despues de estimar se seleccionan los cantones del panel.
-    territorios <- leer_territorios(raiz_tesis)
-    poblacion_cantonal <- territorios[territorios$anio %in% anios_panel, ]
-    mostrar_etapa("6. Periodo y catalogo territorial", resumir_filas_consola(poblacion_cantonal))
-    datos_por_anio <- setNames(lapply(anios_panel, function(anio) {
-      mostrar_etapa(paste("7. Lectura y validacion de microdatos del anio", anio))
-      fuente <- cargar_anio_panel(raiz_tesis, anio)
-      mostrar_etapa("Registros leidos y claves verificadas", data.frame(
-        base = c("Personas", "Vivienda"), filas = c(nrow(fuente$personas), nrow(fuente$vivienda)),
-        columnas = c(ncol(fuente$personas), ncol(fuente$vivienda))))
-      fuente
-    }), as.character(anios_panel))
-    agregar_anio <- function(d, anio) { d$anio <- as.integer(anio); as.data.frame(d) }
-    datos_extraidos <- do.call(rbind, Map(function(d, a) agregar_anio(d$personas, a),
-                                          datos_por_anio, anios_panel))
-    vivienda_extraida <- do.call(rbind, Map(function(d, a) agregar_anio(d$vivienda, a),
-                                            datos_por_anio, anios_panel))
-    rownames(datos_extraidos) <- NULL
-    rownames(vivienda_extraida) <- NULL
-    print(data.frame(objeto = c("datos_extraidos", "vivienda_extraida"),
-                     filas = c(nrow(datos_extraidos), nrow(vivienda_extraida)),
-                     columnas = c(ncol(datos_extraidos), ncol(vivienda_extraida))))
-    
-    # 7.1. REVISAR MUESTRA GENERAL ANTES DE CONSTRUIR INDICADORES ---------------
-    # Partimos de TODOS los cantones de los insumos, sin excluir un canton
-    # completo por tener anios pequenos. Contamos filas de personas de todas
-    # las edades, sin sumar pesos ni agregar filas de vivienda.
-    muestra_general_R <- poblacion_cantonal[, c("anio", "codigo_provincia",
-                                                "provincia", "codigo_canton", "canton")]
-    stopifnot(!anyDuplicated(clave_panel(muestra_general_R)))
-    muestra_general_R$registros_personas <- vapply(
-      seq_len(nrow(muestra_general_R)), function(i) {
-        p <- datos_por_anio[[as.character(muestra_general_R$anio[i])]]$personas
-        sum(p$codigo_canton == muestra_general_R$codigo_canton[i], na.rm = TRUE)
-      }, numeric(1))
-    muestra_general_R$cumple_muestra_general <-
-      muestra_general_R$registros_personas >= muestra_general_minima
-    mostrar_etapa("7.1 Muestra general por canton y anio", muestra_general_R)
-    resumen_muestra_R <- do.call(rbind, lapply(sort(unique(muestra_general_R$anio)), function(a) {
-      x <- muestra_general_R[muestra_general_R$anio == a, ]
-      data.frame(anio = a, canton_anio_evaluados = nrow(x),
-                 cumplen_al_menos60 = sum(x$cumple_muestra_general),
-                 excluidos_menor60 = sum(!x$cumple_muestra_general),
-                 sin_personas_observadas = sum(x$registros_personas == 0))
-    }))
-    mostrar_etapa("Resultado de la seleccion inicial por muestra", resumen_muestra_R)
-    # Seleccion inicial del ambito ANTES de construir indicadores.
-    # Se seleccionan cantones-anio, no personas del diseno nacional.
-    revision_muestra_inicial_R <- muestra_general_R
-    territorios_seleccionados_R <- muestra_general_R[
-      muestra_general_R$cumple_muestra_general,
-      c("anio", "codigo_provincia", "provincia", "codigo_canton", "canton"),
-      drop = FALSE]
-    if (!nrow(territorios_seleccionados_R)) stop("Ningun canton-anio cumple la muestra general de 60 registros.")
-    poblacion_cantonal <- territorios_seleccionados_R
-    # Los microdatos nacionales siguen completos para estimar subpoblaciones.
-    
-    # 8. CONSTRUIR COLUMNAS CALCULADAS EN OTROS OBJETOS -------------------------
-    # Conceptos, variables, formulas y comandos estan explicados en 4.1-4.7.
-    # calcular_anio_panel() agrega los flags y componentes y llama los
-    # estimadores de enemduR. No escribe archivos.
-    # Un resultado estadistico por indicador, canton y anio, sin guardar avisos.
-    resultados_por_anio <- list()
-    anios_con_muestra <- sort(unique(poblacion_cantonal$anio))
-    for (anio_actual in anios_con_muestra) {
-      mostrar_etapa(paste("8. Construccion y estimacion de indicadores del anio", anio_actual))
-      resultados_por_anio[[as.character(anio_actual)]] <- suppressWarnings(
-        calcular_anio_panel(datos_por_anio[[as.character(anio_actual)]],
-                            poblacion_cantonal[poblacion_cantonal$anio == anio_actual, ], anio_actual))
-      r_anio <- resultados_por_anio[[as.character(anio_actual)]]$indicadores
-      mostrar_etapa("Resultados por indicador", do.call(rbind, lapply(unique(r_anio$indicator_id), function(id) {
-        x <- r_anio[r_anio$indicator_id == id, ]
-        data.frame(indicador = id, cantones = nrow(x),
-                   disponibles = sum(is.finite(x$porcentaje_exploratorio)),
-                   faltantes = sum(!is.finite(x$porcentaje_exploratorio)),
-                   ceros = sum(x$porcentaje_exploratorio == 0, na.rm = TRUE))
-      })))
-    }
-    datos_con_calculos <- do.call(rbind, Map(function(d, a) agregar_anio(d$personas_calculadas, a),
-                                             resultados_por_anio, anios_con_muestra))
-    hogares_con_calculos <- do.call(rbind, Map(function(d, a) agregar_anio(d$hogares_calculados, a),
-                                               resultados_por_anio, anios_con_muestra))
-    # Estimadores publicados en el tabulado INEC, aplicados a nuestros indicadores.
-    # Una fila por indicador/canton/anio, incluyendo los casos sin estimacion.
-    # Porcentajes e intervalos en escala 0-100; SE en puntos porcentuales.
-    # CV en porcentaje (100 * SE / abs(estimacion)); indefinido si valor = 0.
-    estimadores <- do.call(rbind, lapply(resultados_por_anio, `[[`, "indicadores"))
-    j_estimadores <- match(clave_panel(estimadores), clave_panel(poblacion_cantonal))
-    stopifnot(!anyNA(j_estimadores))
-    estimadores <- data.frame(
-      anio = estimadores$anio,
-      codigo_provincia = poblacion_cantonal$codigo_provincia[j_estimadores],
-      provincia = poblacion_cantonal$provincia[j_estimadores],
-      codigo_canton = estimadores$codigo_canton,
-      canton = poblacion_cantonal$canton[j_estimadores],
-      indicador = estimadores$indicator_id,
-      valor_pct = estimadores$porcentaje_exploratorio,
-      error_estandar_pp = estimadores$error_estandar_pp,
-      limite_inferior_pct = estimadores$ic95_inferior,
-      limite_superior_pct = estimadores$ic95_superior,
-      cv_pct = ifelse(is.finite(estimadores$estimate) & estimadores$estimate != 0,
-                      100 * estimadores$standard_error / abs(estimadores$estimate), NA_real_),
-      stringsAsFactors = FALSE)
-    rownames(estimadores) <- NULL
-    muestra_R <- do.call(rbind, lapply(resultados_por_anio, `[[`, "muestra"))
-    
-    # 9. DEJAR SOLO INDICADORES AGREGADOS EN UN DATA FRAME CANTON-ANIO -----------
-    # El objeto conserva las claves y cinco porcentajes, no microdatos.
-    # Los nombres provisional/aproximacion evitan atribuir validacion pendiente.
-    indicadores_agregados <- poblacion_cantonal[, c("anio", "codigo_provincia", "provincia", "codigo_canton", "canton")]
-    nombres_indicadores <- c(
-      inasistencia_12_17 = "inasistencia_12_17_pct",
-      desempleo_general = "desempleo_pct",
-      pobreza_ingresos = "pobreza_ingresos_pct",
-      adolescentes_nbi_sobre_total_provisional = "adolescentes_nbi_sobre_total_provisional_pct",
-      monoparental_jefatura_aproximacion = "monoparental_jefatura_aproximacion_pct")
-    for (id in names(nombres_indicadores)) {
-      estimacion <- estimadores[estimadores$indicador == id, ]
-      stopifnot(!anyDuplicated(clave_panel(estimacion)))
-      j <- match(clave_panel(indicadores_agregados), clave_panel(estimacion))
-      indicadores_agregados[[nombres_indicadores[[id]]]] <- estimacion$valor_pct[j]
-    }
-    
-    mostrar_etapa("9. Indicadores agregados por anio", resumir_filas_consola(indicadores_agregados))
-    mostrar_etapa("Disponibilidad y ceros por indicador", resumir_indicadores_consola(indicadores_agregados, unname(nombres_indicadores)))
-    mostrar_etapa("Primeras filas de los indicadores", utils::head(indicadores_agregados, 6))
-    # 10. DOS TABLAS: INDICADORES CON Y SIN FALTANTES --------------------------
-    tabla_indicadores_sin_filtrar <- indicadores_agregados
-    columnas_indicadores <- unname(nombres_indicadores)
-    conservar_indicadores <- Reduce(`&`, lapply(
-      indicadores_agregados[, columnas_indicadores, drop = FALSE], is.finite))
-    tabla_indicadores_limpia <- indicadores_agregados[conservar_indicadores, , drop = FALSE]
-    indicadores_descartados_R <- indicadores_agregados[!conservar_indicadores, , drop = FALSE]
-    stopifnot(setequal(clave_panel(indicadores_agregados), clave_panel(territorios_seleccionados_R)))
-    mostrar_etapa("10. Limpieza de indicadores", data.frame(
-      filas_antes = nrow(tabla_indicadores_sin_filtrar),
-      filas_con_algun_faltante = nrow(indicadores_descartados_R),
-      filas_conservadas = nrow(tabla_indicadores_limpia),
-      cantones_conservados = length(unique(tabla_indicadores_limpia$codigo_canton))))
-    mostrar_etapa("Filas conservadas por anio", resumir_filas_consola(tabla_indicadores_limpia))
-    mostrar_etapa("Ceros conservados y disponibilidad final", resumir_indicadores_consola(tabla_indicadores_limpia, columnas_indicadores))
-    cat("\nResumen estadistico de los indicadores limpios\n")
-    print(summary(tabla_indicadores_limpia))
-    # 11. EXPORTAR LOS DOS EXCEL DE FACTORES ----------------------------------
-    if (isTRUE(exportar_tabla)) {
-      writexl::write_xlsx(list(Indicadores_sin_filtrar = tabla_indicadores_sin_filtrar),
-                          file.path(raiz_tesis, "DATAS_PROCESADAS", "construccion_indicadores_factores_sin_filtrar.xlsx"))
-      writexl::write_xlsx(list(Indicadores_limpios = tabla_indicadores_limpia),
-                          file.path(raiz_tesis, "DATAS_PROCESADAS", "construccion_indicadores_factores.xlsx"))
-      mostrar_etapa("11. Excel de indicadores guardados", data.frame(
-        archivo = c("construccion_indicadores_factores_sin_filtrar.xlsx", "construccion_indicadores_factores.xlsx"),
-        filas = c(nrow(tabla_indicadores_sin_filtrar), nrow(tabla_indicadores_limpia))))
-    }
-  }, finally = options(opciones_encuesta))
+if (!exists("anios_panel")) anios_panel <- 2021:2025
+if (!exists("exportar_tabla")) exportar_tabla <- TRUE
+stopifnot(all(anios_panel %in% 2021:2025))
+carpeta_salida <- file.path(raiz_tesis, "DATAS_PROCESADAS")
+dir.create(carpeta_salida, recursive = TRUE, showWarnings = FALSE)
+opciones_encuesta <- options(survey.lonely.psu = "adjust", survey.adjust.domain.lonely = TRUE)
+poblacion_cantonal <- leer_territorios(raiz_tesis) %>%
+  filter(anio %in% anios_panel) %>%
+  mutate(anio = as.integer(anio), codigo_canton = as.character(codigo_canton))
+mostrar_etapa("6. Periodo y catalogo territorial", resumir_filas_consola(poblacion_cantonal))
+
+# 7. LECTURA DE MICRODATOS ----------------------------------------------------
+# Cada fila es una persona (o vivienda). Se conserva el pais completo para
+# declarar el diseno; los cantones del panel se seleccionan al estimar.
+datos_por_anio <- anios_panel %>%
+  set_names() %>%
+  map(\(anio) {
+    fuente <- cargar_anio_panel(raiz_tesis, anio)
+    mostrar_etapa(paste("7. Microdatos", anio), tibble(
+      base = c("Personas", "Vivienda"),
+      filas = c(nrow(fuente$personas), nrow(fuente$vivienda)),
+      columnas = c(ncol(fuente$personas), ncol(fuente$vivienda))))
+    fuente
+  })
+# Agrega la columna anio a las bases de personas y hogares antes de unirlas.
+agregar_anio <- function(d, anio) mutate(as.data.frame(d), anio = as.integer(anio))
+datos_extraidos <- do.call(rbind, Map(\(d, a) agregar_anio(d$personas, a), datos_por_anio, anios_panel))
+vivienda_extraida <- do.call(rbind, Map(\(d, a) agregar_anio(d$vivienda, a), datos_por_anio, anios_panel))
+
+# 8. CONSTRUCCION Y ESTIMACION DE INDICADORES ---------------------------------
+# Conceptos, variables y formulas: ver 4.1-4.7. Sin filtro de tamano de muestra:
+# todo canton-anio queda en la tabla; si no hay denominador, el indicador es NA.
+resultados_por_anio <- anios_panel %>%
+  set_names() %>%
+  map(\(anio_actual) {
+    resultado <- suppressWarnings(calcular_anio_panel(
+      datos_por_anio[[as.character(anio_actual)]],
+      filter(poblacion_cantonal, anio == anio_actual), anio_actual))
+    mostrar_etapa(paste("8. Indicadores", anio_actual), resultado$indicadores %>%
+                    group_by(indicador = indicator_id) %>%
+                    summarise(cantones = n(),
+                              disponibles = sum(is.finite(porcentaje_exploratorio)),
+                              faltantes = sum(!is.finite(porcentaje_exploratorio)),
+                              ceros = sum(porcentaje_exploratorio == 0, na.rm = TRUE)))
+    resultado
+  })
+options(opciones_encuesta)
+datos_con_calculos <- do.call(rbind, Map(\(d, a) agregar_anio(d$personas_calculadas, a), resultados_por_anio, anios_panel))
+hogares_con_calculos <- do.call(rbind, Map(\(d, a) agregar_anio(d$hogares_calculados, a), resultados_por_anio, anios_panel))
+muestra_R <- resultados_por_anio %>% map(\(x) x$muestra) %>% list_rbind()
+
+# Hogares y personas encuestados por provincia, canton y anio.
+muestra_por_canton <- datos_con_calculos %>%
+  group_by(anio, codigo_canton) %>%
+  summarise(hogares = n_distinct(id_hogar), personas = n(), .groups = "drop") %>%
+  left_join(distinct(poblacion_cantonal, codigo_canton, provincia, canton), by = "codigo_canton")
+mostrar_etapa("8. Totales por provincia y anio", muestra_por_canton %>%
+                group_by(provincia, anio) %>%
+                summarise(cantones = n(), hogares = sum(hogares), personas = sum(personas), .groups = "drop"))
+mostrar_etapa("8. Hogares por canton y anio", muestra_por_canton %>%
+                select(provincia, canton, anio, hogares) %>%
+                pivot_wider(names_from = anio, values_from = hogares, names_prefix = "hogares_") %>%
+                arrange(provincia, canton))
+mostrar_etapa("8. Personas por canton y anio", muestra_por_canton %>%
+                select(provincia, canton, anio, personas) %>%
+                pivot_wider(names_from = anio, values_from = personas, names_prefix = "personas_") %>%
+                arrange(provincia, canton))
+
+# Estimadores originales: una fila por indicador, canton y anio (objeto de R).
+# Porcentajes e intervalos en 0-100; error estandar en puntos porcentuales;
+# CV en porcentaje (100 * SE / estimacion), indefinido si la estimacion es 0.
+# muestra_denominador = registros validos del denominador de cada indicador:
+#   PERSONAS en inasistencia (adolescentes 12-17 con p07 = 1 o 2), desempleo (PEA),
+#   pobreza (personas con pobreza 0 o 1) y NBI (personas del canton-anio; se omiten
+#   los adolescentes sin dato de NBI);
+#   HOGARES en monoparentalidad (una fila por hogar clasificable).
+estimadores <- resultados_por_anio %>%
+  map(\(x) x$indicadores %>%
+        as_tibble() %>%
+        select(anio, codigo_canton, indicator_id, porcentaje_exploratorio, error_estandar_pp,
+               ic95_inferior, ic95_superior, estimate, standard_error,
+               unweighted_n, degrees_freedom)) %>%
+  list_rbind() %>%
+  mutate(anio = as.integer(anio), codigo_canton = as.character(codigo_canton)) %>%
+  left_join(select(poblacion_cantonal, anio, codigo_provincia, provincia, codigo_canton, canton),
+            by = c("anio", "codigo_canton")) %>%
+  transmute(anio, codigo_provincia, provincia, codigo_canton, canton,
+            indicador = indicator_id,
+            valor_pct = porcentaje_exploratorio,
+            error_estandar_pp,
+            limite_inferior_pct = ic95_inferior,
+            limite_superior_pct = ic95_superior,
+            cv_pct = if_else(is.finite(estimate) & estimate != 0,
+                             100 * standard_error / abs(estimate), NA_real_),
+            muestra_denominador = unweighted_n,
+            grados_libertad = degrees_freedom)
+stopifnot(!anyNA(estimadores$canton),
+          !anyDuplicated(estimadores[, c("anio", "codigo_canton", "indicador")]))
+mostrar_etapa("8. Estimadores originales", estimadores %>%
+                summarise(filas = n(), indicadores = n_distinct(indicador),
+                          con_valor = sum(is.finite(valor_pct)),
+                          con_error_cero = sum(error_estandar_pp == 0, na.rm = TRUE)))
+
+# 9. INDICADORES ORIGINALES POR CANTON-ANIO -----------------------------------
+# Cinco porcentajes por canton-anio, con sus ceros y sus NA.
+nombres_indicadores <- c(
+  inasistencia_12_17 = "inasistencia_12_17_pct",
+  desempleo_general = "desempleo_pct",
+  pobreza_ingresos = "pobreza_ingresos_pct",
+  adolescentes_nbi_sobre_total_provisional = "adolescentes_nbi_sobre_total_provisional_pct",
+  monoparental_jefatura_aproximacion = "monoparental_jefatura_aproximacion_pct")
+columnas_indicadores <- unname(nombres_indicadores)
+claves_territorio <- c("anio", "codigo_provincia", "provincia", "codigo_canton", "canton")
+# Convierte las estimaciones (una fila por indicador) a la tabla de indicadores (una columna por indicador).
+a_formato_ancho <- function(tabla, valor) {
+  tabla %>%
+    mutate(columna = unname(nombres_indicadores[indicador])) %>%
+    select(anio, codigo_canton, columna, all_of(valor)) %>%
+    pivot_wider(names_from = columna, values_from = all_of(valor))
+}
+indicadores_agregados <- poblacion_cantonal %>%
+  select(all_of(claves_territorio)) %>%
+  left_join(a_formato_ancho(estimadores, "valor_pct"), by = c("anio", "codigo_canton")) %>%
+  select(all_of(c(claves_territorio, columnas_indicadores)))
+mostrar_etapa("9. Indicadores por anio", resumir_filas_consola(indicadores_agregados))
+mostrar_etapa("Disponibilidad y ceros por indicador",
+              resumir_indicadores_consola(indicadores_agregados, columnas_indicadores))
+if (isTRUE(exportar_tabla)) {
+  writexl::write_xlsx(list(Indicadores = indicadores_agregados),
+                      file.path(carpeta_salida, "construccion_indicadores_factores.xlsx"))
+  mostrar_etapa("Excel guardado", tibble(
+    archivo = "construccion_indicadores_factores.xlsx", filas = nrow(indicadores_agregados)))
 }
 
-# 12. ESTIMADORES Y RESUMEN DEL ARCHIVO LIMPIO DE FACTORES --------------------
-if (!isTRUE(solo_preparar)) {
-  # 1. LIBRERÍAS ---------------------------------------------------------------
-  library(dplyr)
-  
-  # 2. RECUPERAR MUESTRA Y GRADOS DE LIBERTAD DE CADA ESTIMACIÓN ------------------
-  # unweighted_n: registros que participan en el denominador del indicador.
-  # degrees_freedom: grados de libertad del diseño para esa subpoblación.
-  # No se sustituye esta muestra por el total general de personas del cantón.
-  
-  stopifnot(
-    exists("resultados_por_anio"),
-    exists("estimadores"),
-    exists("tabla_indicadores_limpia")
-  )
-  
-  normalizar_canton <- function(x) {
-    sprintf("%04d", as.integer(as.character(x)))
+# 10. ESTIMACIONES ORIGINALES EN EXCEL ----------------------------------------
+# Una fila por indicador, canton y anio: porcentaje, error estandar, IC95, CV,
+# n del denominador y grados de libertad. Sin suavizar. Es el insumo de la Parte 2.
+if (isTRUE(exportar_tabla)) {
+  writexl::write_xlsx(list(Estimaciones_originales = estimadores),
+                      file.path(carpeta_salida, "estimaciones_originales.xlsx"))
+  mostrar_etapa("Excel guardado", tibble(
+    archivo = "estimaciones_originales.xlsx", filas = nrow(estimadores)))
+}
+
+# ============================================================================
+# PARTE 2: ESTIMACION EN AREAS PEQUENAS (SUAVIZADO)
+# ============================================================================
+# No lee archivos externos: usa los objetos que dejo la Parte 1 en memoria.
+#   estimadores           porcentaje, error estandar, IC, n y grados de libertad
+#                         por indicador, canton y anio (sin suavizar).
+#   indicadores_agregados indicadores originales (para conservar columnas y NA).
+#   nombres_indicadores, columnas_indicadores, claves_territorio, a_formato_ancho,
+#   mostrar_etapa, resumir_indicadores_consola, biblioteca_local, carpeta_salida
+#   y exportar_tabla.
+# Los pesos originales de la ENEMDU no se modifican: no hay calibracion. Los
+# cantones no son dominios de diseno y sus estimaciones directas son imprecisas;
+# por eso se aplica estimacion en areas pequenas sobre los indicadores ya
+# construidos. Auxiliares del modelo: solo provincia y anio (sin Censo).
+# Orden: (12) marcas de precision, (13) suavizado del error estandar con una
+# funcion generalizada de la varianza (GVF), (14) Fay-Herriot, (15) salidas.
+# Fuentes verificadas de esta parte:
+#   INEC (2018). Estimacion en areas pequenas de la desnutricion cronica infantil
+#     en Ecuador [Presentacion]. CEPAL. (Fay-Herriot con GVF a nivel cantonal con
+#     encuestas de representatividad provincial; trata ECV y ENSANUT, no ENEMDU.)
+#   INEC (2025). Aproximacion metodologica para la evaluacion de la precision de
+#     la inferencia estadistica en encuestas de hogares con disenos complejos.
+#   You y Hidiroglou (2024). Application of sampling variance smoothing methods
+#     for small area proportion estimation. Statistics Canada.
+#   You (2021). Survey Methodology, 47(2).
+#   Fay y Herriot (1979). Journal of the American Statistical Association, 74(366).
+#   Molina y Marhuenda (2015). The R Journal, 7(1).
+stopifnot(exists("estimadores"), exists("indicadores_agregados"),
+          exists("a_formato_ancho"), exists("nombres_indicadores"),
+          exists("biblioteca_local"), exists("carpeta_salida"))
+stopifnot(all(c("anio", "codigo_provincia", "provincia", "codigo_canton", "canton",
+                "indicador", "valor_pct", "error_estandar_pp", "limite_inferior_pct",
+                "limite_superior_pct", "cv_pct", "muestra_denominador",
+                "grados_libertad") %in% names(estimadores)))
+mostrar_etapa("Parte 2. Objetos recibidos de la Parte 1", tibble(
+  objeto = c("estimadores", "indicadores_agregados"),
+  filas = c(nrow(estimadores), nrow(indicadores_agregados))))
+
+# 11. LIBRERIA DE AREAS PEQUENAS -----------------------------------------------
+# sae: ajuste del modelo Fay-Herriot (sae::mseFH, REML) y error cuadratico medio
+# del valor suavizado. Fuente: Molina y Marhuenda (2015), The R Journal, 7(1).
+# Las demas librerias (dplyr, purrr, tidyr, tibble, writexl) ya se cargaron en la Parte 1.
+# No se usa library(sae): al adjuntarlo carga MASS, cuya funcion select() tapa a la
+# de dplyr y rompe select() mas adelante. Se llama siempre con el prefijo sae::.
+if (!requireNamespace("sae", quietly = TRUE)) {
+  install.packages("sae", lib = biblioteca_local, dependencies = NA)
+}
+if (!requireNamespace("sae", quietly = TRUE)) stop("No se pudo instalar: sae")
+mostrar_etapa("11. Paquete de areas pequenas cargado", data.frame(
+  paquete = "sae", version = as.character(utils::packageVersion("sae"))))
+
+# 12. CRITERIOS DE PRECISION INEC (marcas en el objeto estimadores) -------------
+# Criterios: denominador >= 60, grados de libertad >= 9 y error estandar menor o
+# igual al maximo tolerable, con p en escala 0-1:
+#   raiz_cubica(p^2) / 9 si p < 0.5;  raiz_cubica((1 - p)^2) / 9 si p >= 0.5.
+# Fuente: INEC (2025), Aproximacion metodologica para la evaluacion de la precision
+# de la inferencia estadistica en encuestas de hogares con disenos complejos,
+# pp. 22-23.
+# Un error estandar de cero (menor a 1e-10 pp) no cumple: significa falta de
+# variacion en la muestra, no precision. Solo marcan; no excluyen filas.
+estimadores <- estimadores %>%
+  mutate(error_maximo_tolerable_pp =
+           100 * pmin(valor_pct / 100, 1 - valor_pct / 100)^(2 / 3) / 9,
+         cumple_muestra = muestra_denominador >= 60,
+         cumple_gl = grados_libertad >= 9,
+         cumple_error = error_estandar_pp > 1e-10 &
+           error_estandar_pp <= error_maximo_tolerable_pp)
+resumen_precision <- estimadores %>%
+  filter(is.finite(valor_pct)) %>%
+  group_by(indicador) %>%
+  summarise(estimaciones = n(),
+            error_cero = sum(error_estandar_pp <= 1e-10, na.rm = TRUE),
+            muestra_60 = sum(cumple_muestra, na.rm = TRUE),
+            gl_9 = sum(cumple_gl, na.rm = TRUE),
+            error_tolerable = sum(cumple_error, na.rm = TRUE),
+            cumplen_los_tres = sum(cumple_muestra & cumple_gl & cumple_error, na.rm = TRUE))
+mostrar_etapa("12. Criterios de precision INEC", resumen_precision)
+
+# 13. SUAVIZADO DEL ERROR ESTANDAR (GVF) ---------------------------------------
+# Con pocas personas encuestadas el error estandar directo sale en cero o muy
+# inestable, y Fay-Herriot lo trata como conocido. Se reemplaza por el error
+# esperado segun el tamano de muestra, con una funcion generalizada de la varianza:
+#   log(V_i) = b0 + b1 log(n_i) + e_i,  e_i ~ N(0, tau2)
+# V_i = (error estandar)^2 en escala 0-1; n_i = registros del denominador del
+# indicador (muestra_denominador: personas, u hogares en monoparentalidad).
+# Al volver de la escala logaritmica se multiplica por exp(tau2 / 2) (correccion
+# de Rivest y Belmonte) para no subestimar la varianza promedio.
+# Fuente: You y Hidiroglou (2024), ecuaciones 4, 6 y 7; forma log-lineal tambien
+# en You (2021), seccion 3.
+# El GVF se ajusta solo con V_i > 0 (el log de 0 no existe; errores menores a
+# 1e-10 pp son cero numerico) y predice V_i en todas las celdas con valor.
+# Los NA no entran al calculo y se reponen como NA; ninguna fila se elimina.
+suavizar_varianza <- function(d) {
+  d <- filter(d, is.finite(valor_pct))
+  usa <- is.finite(d$error_estandar_pp) & d$error_estandar_pp > 1e-10 & d$muestra_denominador > 0
+  stopifnot(sum(usa) > 2)
+  gvf <- lm(log((error_estandar_pp / 100)^2) ~ log(muestra_denominador), data = d[usa, ])
+  tau2 <- summary(gvf)$sigma^2
+  d$vardir <- as.numeric(exp(predict(gvf, d) + tau2 / 2))
+  d$usa_gvf <- usa
+  stopifnot(all(is.finite(d$vardir)), all(d$vardir > 0))
+  diagnostico <- tibble(indicador = first(d$indicador), celdas_con_valor = nrow(d),
+                        celdas_gvf = sum(usa), b0 = unname(coef(gvf)[1]),
+                        b1 = unname(coef(gvf)[2]), tau2 = tau2, factor_rb = exp(tau2 / 2))
+  list(datos = d, diagnostico = diagnostico)
+}
+resultado_varianza <- estimadores %>% group_split(indicador) %>% map(suavizar_varianza)
+datos_varianza <- resultado_varianza %>% map("datos") %>% list_rbind()
+diagnostico_varianza <- resultado_varianza %>% map("diagnostico") %>% list_rbind()
+mostrar_etapa("13. Suavizado del error estandar (GVF)", diagnostico_varianza)
+
+# 14. FAY-HERRIOT POR INDICADOR ------------------------------------------------
+# Modelo de area, cada canton-anio es un area:
+#   y_i = x_i'b + v_i + e_i,  v_i ~ N(0, s2_v),  e_i con varianza V_i conocida
+# (la V_i suavizada de la seccion 13). Valor suavizado (EBLUP):
+#   g_i * y_i + (1 - g_i) * x_i'b,  g_i = s2_v / (s2_v + V_i)
+# Si el dato del canton es confiable (V_i baja), g_i es alto y el resultado queda
+# cerca del dato original; si tiene poca muestra (V_i alta), se acerca al valor
+# esperado de su provincia y anio. x_i = provincia + anio. Estimacion REML con
+# sae::mseFH; si no converge, metodo FH. El valor suavizado NO sustituye al
+# original: cada uno tiene su Excel.
+# Fuentes: Fay y Herriot (1979), el modelo; You (2021), por que suavizar la
+# varianza antes del modelo; Molina y Marhuenda (2015), sae::mseFH.
+ajustar_fay_herriot <- function(d) {
+  prop <- d$valor_pct / 100
+  vardir <- d$vardir
+  # sae::mseFH toma estas variables del entorno de la funcion.
+  prov_f <- factor(d$codigo_provincia)
+  anio_f <- factor(d$anio)
+  ajuste <- NULL
+  for (metodo in c("REML", "FH")) {
+    intento <- tryCatch(sae::mseFH(prop ~ prov_f + anio_f, vardir = vardir, method = metodo),
+                        error = \(e) NULL)
+    if (!is.null(intento) && isTRUE(intento$est$fit$convergence)) { ajuste <- intento; break }
   }
+  if (is.null(ajuste)) stop("No convergio Fay-Herriot: ", unique(d$indicador))
+  eblup <- as.numeric(unlist(ajuste$est$eblup))
+  mse <- as.numeric(unlist(ajuste$mse))
+  refvar <- as.numeric(unlist(ajuste$est$fit$refvar))[1]
+  stopifnot(length(eblup) == nrow(d), length(mse) == nrow(d), is.finite(refvar))
   
-  detalle_diseno <- bind_rows(
-    lapply(resultados_por_anio, function(x) x$indicadores)
-  )
-  
-  stopifnot(all(
-    c("anio", "codigo_canton", "indicator_id",
-      "unweighted_n", "degrees_freedom") %in% names(detalle_diseno)
-  ))
-  
-  detalle_diseno <- detalle_diseno |>
-    transmute(
-      anio = as.integer(anio),
-      codigo_canton = normalizar_canton(codigo_canton),
-      indicador = indicator_id,
-      muestra_denominador = unweighted_n,
-      grados_libertad = degrees_freedom
-    )
-  
-  stopifnot(!anyDuplicated(
-    detalle_diseno[, c("anio", "codigo_canton", "indicador")]
-  ))
-  
-  # 3. SELECCIONAR LAS MISMAS FILAS DE LA TABLA LIMPIA ----------------------------
-  claves_finales <- tabla_indicadores_limpia |>
-    transmute(
-      anio = as.integer(anio),
-      codigo_canton = normalizar_canton(codigo_canton)
-    ) |>
-    distinct()
-  
-  estimaciones_clasificadas <- estimadores |>
-    mutate(
-      anio = as.integer(anio),
-      codigo_canton = normalizar_canton(codigo_canton)
-    ) |>
-    semi_join(
-      claves_finales,
-      by = c("anio", "codigo_canton")
-    ) |>
-    left_join(
-      detalle_diseno,
-      by = c("anio", "codigo_canton", "indicador")
-    )
-  
-  stopifnot(
-    nrow(estimaciones_clasificadas) == nrow(claves_finales) * 5L,
-    !anyDuplicated(
-      estimaciones_clasificadas[
-        , c("anio", "codigo_canton", "indicador")
-      ]
-    )
-  )
-  
-  mostrar_etapa("12. Estimadores del archivo limpio de factores", data.frame(
-    filas_de_factores = nrow(tabla_indicadores_limpia),
-    estimaciones = nrow(estimaciones_clasificadas),
-    indicadores = length(unique(estimaciones_clasificadas$indicador))))
-  
-  # 4. APLICAR LOS CRITERIOS EN ORDEN -------------------------------------------
-  # Todos nuestros indicadores son proporciones.
-  #
-  # Criterios del documento INEC:
-  # 1) Al menos 60 observaciones del denominador.
-  # 2) Al menos 9 grados de libertad.
-  # 3) Comparar el error estándar con el máximo tolerable para la proporción:
-  #
-  #    sqrt(p^(2/3) / 9),       cuando p < 0.5
-  #    sqrt((1-p)^(2/3) / 9),   cuando p >= 0.5
-  #
-  # p y su error deben estar en escala 0–1, no 0–100.
-  #
-  # Control adicional de esta revisión:
-  # Los casos extremos (0 % o 100 %) y errores casi nulos que superen
-  # los dos primeros criterios se dejan pendientes de revisión.
-  # Esta categoría adicional NO es una categoría oficial del INEC.
-  
-  estimaciones_clasificadas <- estimaciones_clasificadas |>
-    mutate(
-      proporcion = valor_pct / 100,
-      error_estandar_proporcion = error_estandar_pp / 100,
-      
-      datos_disponibles = is.finite(proporcion) &
-        proporcion >= 0 & proporcion <= 1 &
-        is.finite(muestra_denominador) &
-        muestra_denominador > 0,
-      
-      cumple_muestra = is.finite(muestra_denominador) &
-        muestra_denominador >= 60,
-      
-      cumple_gl = is.finite(grados_libertad) &
-        grados_libertad >= 9,
-      
-      error_maximo_tolerable = case_when(
-        is.finite(proporcion) &
-          proporcion >= 0 & proporcion < 0.5 ~
-          sqrt(proporcion^(2 / 3) / 9),
-        
-        is.finite(proporcion) &
-          proporcion >= 0.5 & proporcion <= 1 ~
-          sqrt((1 - proporcion)^(2 / 3) / 9),
-        
-        TRUE ~ NA_real_
-      ),
-      
-      # Columna descriptiva independiente de la clasificación.
-      tipo_resultado = case_when(
-        !is.finite(valor_pct) ~ "Indicador faltante",
-        valor_pct == 0 ~ "Indicador igual a 0 %",
-        valor_pct == 100 ~ "Indicador igual a 100 %",
-        
-        !is.finite(error_estandar_pp) |
-          error_estandar_pp < 0 ~ "Error no disponible o invalido",
-        
-        error_estandar_pp < 1e-10 ~
-          "Indicador positivo con error casi cero",
-        
-        TRUE ~ "Indicador positivo con error mayor al umbral"
-      ),
-      
-      clasificacion = case_when(
-        !datos_disponibles ~ "Sin evaluacion",
-        
-        !cumple_muestra ~ "No recomendada para inferencia",
-        
-        !is.finite(grados_libertad) ~ "Sin evaluacion",
-        
-        !cumple_gl ~ "No recomendada para inferencia",
-        
-        !is.finite(error_estandar_proporcion) |
-          error_estandar_proporcion < 0 ~ "Sin evaluacion",
-        
-        proporcion %in% c(0, 1) |
-          error_estandar_pp < 1e-10 ~ "Pendiente de revision",
-        
-        error_estandar_proporcion <= error_maximo_tolerable ~
-          "Fiable segun criterios evaluados",
-        
-        TRUE ~ "Precision reducida"
-      ),
-      
-      motivo = case_when(
-        !datos_disponibles ~
-          "Falta estimacion valida o informacion del denominador",
-        
-        !cumple_muestra ~
-          "Menos de 60 observaciones en el denominador",
-        
-        !is.finite(grados_libertad) ~
-          "Grados de libertad no disponibles",
-        
-        !cumple_gl ~
-          "Menos de 9 grados de libertad",
-        
-        !is.finite(error_estandar_proporcion) |
-          error_estandar_proporcion < 0 ~
-          "Error estandar no disponible o invalido",
-        
-        proporcion %in% c(0, 1) ~
-          "Proporcion extrema: revisar variabilidad e intervalo",
-        
-        error_estandar_pp < 1e-10 ~
-          "Error casi nulo: revisar soporte muestral",
-        
-        error_estandar_proporcion <= error_maximo_tolerable ~
-          "Cumple muestra, grados de libertad y error tolerable",
-        
-        TRUE ~ "Error estandar superior al maximo tolerable"
-      ),
-      
-      error_maximo_tolerable_pp = 100 * error_maximo_tolerable
-    ) |>
-    arrange(anio, codigo_provincia, codigo_canton, indicador)
-  
-  # 5. RESUMEN POR AÑO E INDICADOR ----------------------------------------------
-  # Los pasos son secuenciales: solo pasa al siguiente quien cumple el anterior.
-  
-  resumen_evaluacion <- estimaciones_clasificadas |>
-    group_by(anio, indicador) |>
-    summarise(
-      estimaciones_totales = n(),
-      
-      paso1_datos_disponibles = sum(datos_disponibles),
-      
-      paso2_muestra_al_menos60 = sum(
-        datos_disponibles & cumple_muestra
-      ),
-      
-      paso3_gl_al_menos9 = sum(
-        datos_disponibles & cumple_muestra & cumple_gl
-      ),
-      
-      fiables = sum(
-        clasificacion == "Fiable segun criterios evaluados"
-      ),
-      
-      precision_reducida = sum(
-        clasificacion == "Precision reducida"
-      ),
-      
-      no_recomendadas = sum(
-        clasificacion == "No recomendada para inferencia"
-      ),
-      
-      pendientes_revision = sum(
-        clasificacion == "Pendiente de revision"
-      ),
-      
-      sin_evaluacion = sum(
-        clasificacion == "Sin evaluacion"
-      ),
-      
-      # Estos conteos describen los resultados; no se suman a las categorías.
-      indicadores_igual_cero = sum(
-        tipo_resultado == "Indicador igual a 0 %"
-      ),
-      
-      positivos_error_casi_cero = sum(
-        tipo_resultado == "Indicador positivo con error casi cero"
-      ),
-      
-      .groups = "drop"
-    ) |>
-    mutate(
-      porcentaje_fiables = 100 * fiables / estimaciones_totales,
-      porcentaje_precision_reducida =
-        100 * precision_reducida / estimaciones_totales,
-      porcentaje_no_recomendadas =
-        100 * no_recomendadas / estimaciones_totales
-    ) |>
-    arrange(anio, indicador)
-  
-  # Comprobar que cada estimación tiene una sola clasificación.
-  stopifnot(all(
-    with(
-      resumen_evaluacion,
-      estimaciones_totales ==
-        fiables + precision_reducida + no_recomendadas +
-        pendientes_revision + sin_evaluacion
-    )
-  ))
-  
-  mostrar_etapa("Clasificacion de los estimadores", as.data.frame(table(
-    clasificacion = estimaciones_clasificadas$clasificacion)))
-  cat("\nResumen de estimadores por anio e indicador\n")
-  print(resumen_evaluacion, n = Inf, width = Inf)
-  if (interactive()) View(resumen_evaluacion)
-  
-  # 6. EXPORTAR EL MISMO EXCEL CON DOS HOJAS ------------------------------------
-  # Cerrar el archivo en Excel antes de ejecutar esta sección.
-  # Reemplaza estimadores_finales.xlsx; no modifica la tabla maestra.
-  
-  if (isTRUE(exportar_tabla)) {
-    writexl::write_xlsx(
-      list(
-        Estimaciones_generales = estimaciones_clasificadas,
-        Resumen_anual = resumen_evaluacion
-      ),
-      path = paste0(
-        "C:/Users/camil/OneDrive/Desktop/TESIS/",
-        "DATAS_PROCESADAS/estimadores_finales.xlsx"
-      )
-    )
-    mostrar_etapa("Excel de estimadores guardado", data.frame(
-      archivo = "estimadores_finales.xlsx", estimaciones = nrow(estimaciones_clasificadas),
-      filas_resumen = nrow(resumen_evaluacion)))
-    
-    
-    
-  }
-  
+  datos <- d %>%
+    transmute(anio, codigo_canton, indicador,
+              error_gvf_pp = 100 * sqrt(vardir),
+              valor_suavizado_pct = 100 * eblup,
+              error_suavizado_pp = 100 * sqrt(pmax(mse, 0)),
+              peso_dato_original = refvar / (refvar + vardir),
+              fuera_de_rango = as.integer(eblup < 0 | eblup > 1),
+              cambio_abs_pp = abs(valor_suavizado_pct - valor_pct))
+  diagnostico <- datos %>%
+    summarise(indicador = first(indicador),
+              varianza_entre_cantones_pp2 = 1e4 * refvar,
+              peso_medio = mean(peso_dato_original), fuera_de_rango = sum(fuera_de_rango),
+              cambio_medio_pp = mean(cambio_abs_pp), cambio_maximo_pp = max(cambio_abs_pp),
+              metodo = metodo)
+  list(datos = select(datos, -cambio_abs_pp), diagnostico = diagnostico)
+}
+resultado_fh <- datos_varianza %>% group_split(indicador) %>% map(ajustar_fay_herriot)
+suavizado <- resultado_fh %>% map("datos") %>% list_rbind()
+diagnostico_suavizado <- diagnostico_varianza %>%
+  left_join(resultado_fh %>% map("diagnostico") %>% list_rbind(), by = "indicador")
+mostrar_etapa("14. Fay-Herriot por indicador", diagnostico_suavizado)
+
+# 15. TABLAS DE SALIDA ---------------------------------------------------------
+# Estimaciones: originales y suavizadas en la misma hoja. Solo claves y numeros.
+estimaciones_comparacion <- estimadores %>%
+  left_join(suavizado, by = c("anio", "codigo_canton", "indicador")) %>%
+  transmute(anio, codigo_provincia, provincia, codigo_canton, canton, indicador,
+            muestra_denominador, grados_libertad,
+            valor_original_pct = valor_pct,
+            error_original_pp = error_estandar_pp,
+            error_cero_numerico = as.integer(error_estandar_pp < 1e-10),
+            limite_inferior_pct, limite_superior_pct, cv_pct, error_maximo_tolerable_pp,
+            error_gvf_pp, valor_suavizado_pct, error_suavizado_pp,
+            peso_dato_original, fuera_de_rango,
+            cambio_pp = valor_suavizado_pct - valor_pct) %>%
+  arrange(anio, codigo_provincia, codigo_canton, indicador)
+
+# Indicadores suavizados: mismas columnas y filas que los originales; NA se mantienen.
+indicadores_suavizados <- indicadores_agregados %>%
+  select(all_of(claves_territorio)) %>%
+  left_join(a_formato_ancho(estimaciones_comparacion, "valor_suavizado_pct"),
+            by = c("anio", "codigo_canton")) %>%
+  select(all_of(names(indicadores_agregados)))
+stopifnot(nrow(indicadores_suavizados) == nrow(indicadores_agregados),
+          all(is.na(as.matrix(select(indicadores_suavizados, all_of(columnas_indicadores)))) ==
+                is.na(as.matrix(select(indicadores_agregados, all_of(columnas_indicadores))))))
+mostrar_etapa("15. Disponibilidad de indicadores suavizados",
+              resumir_indicadores_consola(indicadores_suavizados, columnas_indicadores))
+if (isTRUE(exportar_tabla)) {
+  writexl::write_xlsx(list(Estimaciones = estimaciones_comparacion),
+                      file.path(carpeta_salida, "estimaciones_original_vs_suavizado.xlsx"))
+  writexl::write_xlsx(list(Indicadores_suavizados = indicadores_suavizados),
+                      file.path(carpeta_salida, "indicadores_suavizados.xlsx"))
+  mostrar_etapa("Excel guardados", tibble(
+    archivo = c("estimaciones_original_vs_suavizado.xlsx", "indicadores_suavizados.xlsx"),
+    filas = c(nrow(estimaciones_comparacion), nrow(indicadores_suavizados))))
 }
