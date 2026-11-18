@@ -1,6 +1,5 @@
-# ============================================================================
 # INDICADORES CANTONALES 2021-2025: CONSTRUCCION (PARTE 1) Y SUAVIZADO (PARTE 2)
-# ============================================================================
+
 # Paquete: yerovi84/enemduR (v0.1.0-alpha.2). Las funciones sin prefijo enemdu_
 # son adaptaciones propias.
 # Parte 1 (secciones 1-10): construye los indicadores originales con los pesos
@@ -34,9 +33,9 @@ resumir_filas_consola <- function(tabla) {
               provincias = n_distinct(codigo_provincia))
 }
 
-# ============================================================================
+
 # PARTE 1: CONSTRUCCION DE INDICADORES ORIGINALES
-# ============================================================================
+
 # 1. RUTAS DE TESIS Y BIBLIOTECA PERSONAL DE R ---------------------------------
 # No cambia la carpeta de trabajo del proyecto abierto en RStudio.
 # Las bases originales de TESIS_CODE se abren en lectura y no se modifican.
@@ -578,9 +577,9 @@ if (isTRUE(exportar_tabla)) {
     archivo = "estimaciones_originales.xlsx", filas = nrow(estimadores)))
 }
 
-# ============================================================================
+
 # PARTE 2: ESTIMACION EN AREAS PEQUENAS (SUAVIZADO)
-# ============================================================================
+
 # No lee archivos externos: usa los objetos que dejo la Parte 1 en memoria.
 #   estimadores           porcentaje, error estandar, IC, n y grados de libertad
 #                         por indicador, canton y anio (sin suavizar).
