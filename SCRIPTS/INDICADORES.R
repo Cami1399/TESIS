@@ -7,7 +7,6 @@
 #   estimaciones_originales.xlsx; objeto en R: estimadores.
 # Parte 2 (secciones 11-15): estimacion en areas pequenas sobre esos objetos.
 #   Salidas: estimaciones_original_vs_suavizado.xlsx e indicadores_suavizados.xlsx.
-# Para cambiar anios: definir anios_panel antes de source().
 
 # Salidas de seguimiento: solo consola; no altera ni filtra datos.
 mostrar_etapa <- function(titulo, tabla = NULL) {
