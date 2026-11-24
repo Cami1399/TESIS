@@ -1,12 +1,25 @@
-# INDICADORES CANTONALES 2021-2025: CONSTRUCCION (PARTE 1) Y SUAVIZADO (PARTE 2)
+# INDICADORES CANTONALES 2021-2025: CONSTRUCCION DE LAS ESTIMACIONES DIRECTAS
 
 # Paquete: yerovi84/enemduR (v0.1.0-alpha.2). Las funciones sin prefijo enemdu_
 # son adaptaciones propias.
+<<<<<<< HEAD
 # Parte 1 (secciones 1-10): construye los indicadores originales con los pesos
 #   originales de la ENEMDU. Salidas: construccion_indicadores_factores.xlsx y
 #   estimaciones_originales.xlsx; objeto en R: estimadores.
 # Parte 2 (secciones 11-15): estimacion en areas pequenas sobre esos objetos.
 #   Salidas: estimaciones_original_vs_suavizado.xlsx e indicadores_suavizados.xlsx.
+=======
+# Construye los indicadores originales (estimaciones directas) con los pesos
+# originales de la ENEMDU y marca su precision con los criterios del INEC.
+# Salidas: construccion_indicadores_factores.xlsx y estimaciones_originales.xlsx;
+# objeto en R: estimadores.
+# Orden de los scripts de la tesis:
+#   1. INDICADORES.R                          -> estimaciones directas (este script)
+#   2. SCRIP_VARIABLES_AUXILIARES.R           -> variables auxiliares
+#   3. SCRIP_ESTIMACION_AREAS_PEQUENAS.R      -> varianza, seleccion de variables, Fay-Herriot y validacion
+#   4. VISUSALIZACION.R                       -> graficos y tablas
+# Para cambiar anios: definir anios_panel antes de source().
+>>>>>>> 8461c56 (actualizacion 24/08)
 
 # Salidas de seguimiento: solo consola; no altera ni filtra datos.
 mostrar_etapa <- function(titulo, tabla = NULL) {
@@ -33,7 +46,7 @@ resumir_filas_consola <- function(tabla) {
 }
 
 
-# PARTE 1: CONSTRUCCION DE INDICADORES ORIGINALES
+# CONSTRUCCION DE INDICADORES ORIGINALES
 
 # 1. RUTAS DE TESIS Y BIBLIOTECA PERSONAL DE R ---------------------------------
 
@@ -146,12 +159,31 @@ mostrar_etapa("3. Paquete analitico cargado", data.frame(paquete = "enemduR",
 #   100 * sum(w_i * I(12<=edad<=17) * nbi_i) /
 #         sum(w_i), sobre toda la poblacion del canton-anio
 #   Se usan enemdu_join_nbi_sources(), enemdu_build_nbi_components() y
+<<<<<<< HEAD
 #   enemdu_build_nbi_flags(). El perfil disponible es enemdu_2025_anual
 #   IMPORTANTE: la escolaridad de la jefatura es una aproximacion
 #   El helper de esta version asigna 0 si p10a=1; usa p10b si p10a<=2,
 #   6+p10b si p10a=3 y 12+p10b si p10a>=4 (con entradas disponibles).
 #   Esa aproximacion debe contrastarse con los niveles reales del cuestionario.
 #   Trasladar el perfil a 2021-2024 no esta validado. Se etiqueta PROVISIONAL.
+=======
+#   enemdu_build_nbi_flags(). El perfil disponible es enemdu_2025_anual.
+#   Escolaridad de la jefatura (comp5): correccion propia. El paquete asigna
+#   6+p10b si p10a=3 y 12+p10b si p10a>=4, pero en el cuestionario 4 es
+#   Primaria y 5 Educacion Basica. Se recalcula con los niveles reales de la
+#   pregunta de nivel de instruccion:
+#     1 Ninguno -> 0                 2 Centro de alfabetizacion -> p10b
+#     3 Jardin de infantes -> 0      4 Primaria -> p10b
+#     5 Educacion Basica -> p10b     6 Secundaria -> 6 + p10b
+#     7 Media/Bachillerato -> 10 + p10b     8, 9 y 10 -> 12 + p10b
+#   comp5 = 1 si la jefatura tiene 2 o menos anios y hay mas de 3 personas
+#   por ocupado. La conversion a anios es elaboracion propia; la regla es la
+#   del INEC (2025b, Anexo 2, Tabla 1).
+#   El perfil de 2025 se aplica a 2021-2024. Los codigos se compararon con los
+#   formularios de dic-2021, abr-2022, abr-2023, feb-2024, dic-2024 y oct-2025
+#   (en lo que se pudo leer automaticamente). Esto no valida las cifras de NBI:
+#   se mantiene la etiqueta PROVISIONAL.
+>>>>>>> 8461c56 (actualizacion 24/08)
 #   Estas son reglas implementadas en esta version, no certificacion INEC.
 #   El adolescente con NBI desconocido queda NA y se omite del calculo; el canton se conserva
 #   El denominador es la poblacion total del canton-anio.
@@ -337,6 +369,12 @@ estimar_panel <- function(d, valor, indicador, objetivo, anio, estado_metodo) {
   salida$anio <- anio
   salida$estado_metodo <- estado_metodo
   salida$alcance <- "canton_fuera_dominios_garantizados_diseno"
+  # Datos del diseno que usa la GVF (SCRIP_ESTIMACION_AREAS_PEQUENAS.R): suma de
+  # factores de expansion del denominador, numero de UPM y numero de estratos
+  # con una sola UPM, contados en los registros validos del canton.
+  salida$denominador_expandido <- NA_real_
+  salida$upm_denominador <- NA_integer_
+  salida$estratos_upm_solitaria <- NA_integer_
   # Inicializar por fila aunque el paquete no devuelva estas columnas.
   for (campo in c("decision", "quality_flag", "failed_reasons")) {
     if (!campo %in% names(salida)) salida[[campo]] <- rep(NA_character_, nrow(salida))
@@ -355,6 +393,10 @@ estimar_panel <- function(d, valor, indicador, objetivo, anio, estado_metodo) {
       is.finite(d[[valor]]) & is.finite(d$fexp) & d$fexp > 0
     n_validas <- sum(ix)
     denominador <- sum(d$fexp[ix])
+    upm_por_estrato <- tapply(as.character(d$upm[ix]), as.character(d$estrato[ix]), function(x) length(unique(x)))
+    salida$denominador_expandido[k] <- denominador
+    salida$upm_denominador[k] <- length(unique(d$upm[ix]))
+    salida$estratos_upm_solitaria[k] <- sum(upm_por_estrato == 1)
     if (revisar_denominador && (n_validas == 0 || denominador <= 0)) {
       # Indefinido, nunca 0 %. Conservar NA tambien en las medidas de precision.
       for (v in intersect(c("estimate", "standard_error", "cv", "ci_lower",
@@ -391,6 +433,18 @@ calcular_anio_panel <- function(fuente, objetivo, anio) {
   p$pobreza_panel <- ifelse(p$pobreza %in% c(0, 1), p$pobreza, NA_real_)
   # Candidato de NBI del paquete: no se certifica su perfil ni su traslado historico.
   p <- enemdu_build_nbi_components(p, profile = "enemdu_2025_anual", strict = TRUE)
+  # comp5 con la escolaridad corregida (seccion 4.4).
+  anios_estudio <- ifelse(p$p10a %in% c(1, 3), 0,
+                   ifelse(p$p10a %in% c(2, 4, 5), p$p10b,
+                   ifelse(p$p10a == 6, 6 + p$p10b,
+                   ifelse(p$p10a == 7, 10 + p$p10b, 12 + p$p10b))))
+  jefes <- which(p$p04 == 1)
+  jefes <- jefes[!duplicated(p$id_hogar[jefes])]
+  anios_jefatura <- anios_estudio[jefes][match(p$id_hogar, p$id_hogar[jefes])]
+  ocupados_hogar <- ave(as.numeric(p$empleo %in% 1), p$id_hogar, FUN = sum)
+  personas_por_ocupado <- ifelse(ocupados_hogar == 0, Inf, p$hsize / ocupados_hogar)
+  stopifnot(!anyNA(anios_jefatura), !anyNA(personas_por_ocupado))
+  p$comp5 <- as.integer(anios_jefatura <= 2 & personas_por_ocupado > 3)
   p <- enemdu_build_nbi_flags(p)
   p$nbi_adolescente <- ifelse(is.na(p$p03), NA_integer_, ifelse(edad_ok, p$nbi, 0L))
   # El adolescente sin NBI queda NA y se omite del calculo (denominador total).
@@ -506,7 +560,8 @@ estimadores <- resultados_por_anio %>%
         as_tibble() %>%
         select(anio, codigo_canton, indicator_id, porcentaje_exploratorio, error_estandar_pp,
                ic95_inferior, ic95_superior, estimate, standard_error,
-               unweighted_n, degrees_freedom)) %>%
+               unweighted_n, degrees_freedom, denominador_expandido,
+               upm_denominador, estratos_upm_solitaria)) %>%
   list_rbind() %>%
   mutate(anio = as.integer(anio), codigo_canton = as.character(codigo_canton)) %>%
   left_join(select(poblacion_cantonal, anio, codigo_provincia, provincia, codigo_canton, canton),
@@ -520,13 +575,48 @@ estimadores <- resultados_por_anio %>%
             cv_pct = if_else(is.finite(estimate) & estimate != 0,
                              100 * standard_error / abs(estimate), NA_real_),
             muestra_denominador = unweighted_n,
-            grados_libertad = degrees_freedom)
+            grados_libertad = degrees_freedom,
+            denominador_expandido, upm_denominador, estratos_upm_solitaria)
 stopifnot(!anyNA(estimadores$canton),
           !anyDuplicated(estimadores[, c("anio", "codigo_canton", "indicador")]))
 mostrar_etapa("8. Estimadores originales", estimadores %>%
                 summarise(filas = n(), indicadores = n_distinct(indicador),
                           con_valor = sum(is.finite(valor_pct)),
                           con_error_cero = sum(error_estandar_pp == 0, na.rm = TRUE)))
+
+# 8.1 CRITERIOS DE PRECISION INEC (marcas en el objeto estimadores)
+# Se evalua la calidad de cada estimacion directa canton-anio. Criterios:
+# denominador >= 60, grados de libertad >= 9 y error estandar menor o igual al
+# maximo tolerable, con p en escala 0-1:
+#   raiz_cubica(p^2) / 9 si p < 0.5;  raiz_cubica((1 - p)^2) / 9 si p >= 0.5.
+# Fuente: INEC (2025), Aproximacion metodologica para la evaluacion de la precision
+# de la inferencia estadistica en encuestas de hogares con disenos complejos,
+# pp. 22-23.
+# Un error estandar de cero (menor a 1e-10 pp) no cumple: significa falta de
+# variacion en la muestra, no precision. Solo marcan; no excluyen filas.
+# En la estimacion en areas pequenas entran todas las estimaciones con valor:
+# el estimador Fay-Herriot pondera cada una segun su varianza (Corral et al.,
+# 2022, p. 21); estas marcas sirven para describir la calidad del dato directo.
+# En SCRIP_ESTIMACION_AREAS_PEQUENAS.R (seccion 2) la marca de grados de
+# libertad ayuda a elegir las areas con las que se calcula el efecto de diseno
+# de la GVF. No excluye ningun canton-anio.
+estimadores <- estimadores %>%
+  mutate(error_maximo_tolerable_pp =
+           100 * pmin(valor_pct / 100, 1 - valor_pct / 100)^(2 / 3) / 9,
+         cumple_muestra = muestra_denominador >= 60,
+         cumple_gl = grados_libertad >= 9,
+         cumple_error = error_estandar_pp > 1e-10 &
+           error_estandar_pp <= error_maximo_tolerable_pp)
+resumen_precision <- estimadores %>%
+  filter(is.finite(valor_pct)) %>%
+  group_by(indicador) %>%
+  summarise(estimaciones = n(),
+            error_cero = sum(error_estandar_pp <= 1e-10, na.rm = TRUE),
+            muestra_60 = sum(cumple_muestra, na.rm = TRUE),
+            gl_9 = sum(cumple_gl, na.rm = TRUE),
+            error_tolerable = sum(cumple_error, na.rm = TRUE),
+            cumplen_los_tres = sum(cumple_muestra & cumple_gl & cumple_error, na.rm = TRUE))
+mostrar_etapa("8.1 Criterios de precision INEC", resumen_precision)
 
 # 9. INDICADORES ORIGINALES POR CANTON-ANIO -----------------------------------
 # Cinco porcentajes por canton-anio, con sus ceros y sus NA.
@@ -561,13 +651,20 @@ if (isTRUE(exportar_tabla)) {
 
 # 10. ESTIMACIONES ORIGINALES EN EXCEL ----------------------------------------
 # Una fila por indicador, canton y anio: porcentaje, error estandar, IC95, CV,
+<<<<<<< HEAD
 # n del denominador y grados de libertad. Sin suavizar. 
+=======
+# n del denominador, grados de libertad, datos del diseno (factores de
+# expansion, UPM y estratos con una sola UPM) y marcas de precision INEC (8.1).
+# Sin suavizar. Es el insumo de SCRIP_ESTIMACION_AREAS_PEQUENAS.R.
+>>>>>>> 8461c56 (actualizacion 24/08)
 if (isTRUE(exportar_tabla)) {
   writexl::write_xlsx(list(Estimaciones_originales = estimadores),
                       file.path(carpeta_salida, "estimaciones_originales.xlsx"))
   mostrar_etapa("Excel guardado", tibble(
     archivo = "estimaciones_originales.xlsx", filas = nrow(estimadores)))
 }
+<<<<<<< HEAD
 
 
 # PARTE 2: ESTIMACION EN AREAS PEQUENAS (SUAVIZADO)
@@ -761,3 +858,5 @@ if (isTRUE(exportar_tabla)) {
     archivo = c("estimaciones_original_vs_suavizado.xlsx", "indicadores_suavizados.xlsx"),
     filas = c(nrow(estimaciones_comparacion), nrow(indicadores_suavizados))))
 }
+=======
+>>>>>>> 8461c56 (actualizacion 24/08)
