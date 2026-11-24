@@ -1,78 +1,10 @@
 # ESTIMACION EN AREAS PEQUENAS: MODELO FAY-HERRIOT POR CANTON-ANIO, 2021-2025
 #
-# Combina las estimaciones directas de la ENEMDU con variables auxiliares de
-# registros administrativos y proyecciones de poblacion mediante el modelo de
-# area de Fay y Herriot (1979). Cada canton-anio es un area (86 cantones de la
-# Costa x 5 anios). Se ajusta un modelo por indicador.
+# Combina las estimaciones directas de la ENEMDU con variables auxiliares de registros administrativos y proyecciones de poblacion mediante el modelo de area de Fay y Herriot (1979).
+# Cada canton-anio es un area (86 cantones de la Costa x 5 anios).
+# Se ajusta un modelo por indicador.
 #
-# Orden de los scripts de la tesis:
-#   1. INDICADORES.R                          -> estimaciones directas
-#   2. SCRIP_VARIABLES_AUXILIARES.R           -> variables auxiliares
-#   3. SCRIP_ESTIMACION_AREAS_PEQUENAS.R      -> varianza, seleccion de variables,
-#                                               Fay-Herriot y validacion (este script)
-#   4. VISUSALIZACION.R                       -> graficos y tablas
 #
-# Secciones:
-#   0. Paquetes, rutas y funciones de apoyo
-#   1. Lectura de insumos
-#   2. Suavizado de la varianza del estimador directo (GVF)
-#   3. Modelo Fay-Herriot: marco general y funciones
-#   4. Modelo con las variables auxiliares candidatas (4.1 a 4.5)
-#   5. Modelo con las variables auxiliares seleccionadas (5.1 a 5.6)
-#   6. Resumen y salidas
-#
-# Proceso: se sigue el orden de Corral, Molina, Cojocaru y Segovia (2022),
-# capitulos 3 y 6. Las paginas de cada paso se citan aqui una sola vez; en el
-# resto del script se indica el paso.
-#   Paso 1. Estimaciones directas y sus varianzas (p. 19). Si un area tiene
-#           varianza 0, el modelo no es aplicable salvo que la varianza se
-#           obtenga con otro metodo (pp. 19 y 28). Las varianzas se estiman
-#           con la encuesta y se suavizan cuando no son confiables (p. 27).
-#           -> INDICADORES.R y seccion 2 (GVF con efecto de diseno).
-#   Paso 2. Requisitos: variables auxiliares para todas las areas (p. 24).
-#           -> seccion 1.
-#   Paso 3. Seleccion de variables: ajustar con todas las candidatas (p. 21),
-#           retirar las no significativas porque "may introduce noise"
-#           (p. 104), volver a ajustar con las significativas y revisar el
-#           VIF (pp. 21 y 106).
-#           -> secciones 4 y 5.
-#   Paso 4. Ajuste del modelo: REML, estimacion final (EBLUP) y error (ECM)
-#           (pp. 20-21 y 27-28). Un modelo por indicador (pp. 25 y 28).
-#           -> secciones 3 y 5.
-#   Paso 5. Diagnostico, en este orden: multicolinealidad, areas influyentes y
-#           residuos (p. 105; VIF, p. 106; Cook, p. 107; linealidad, p. 109;
-#           Q-Q, p. 21).
-#           -> validacion c, d, e, h e i.
-#   Paso 6. Revision final: estimaciones negativas (p. 23) y comparacion con
-#           el estimador directo (p. 24, figura 3.2), con el error (raiz del
-#           ECM) y no solo con el CV, porque en proporciones el CV crece
-#           cuando la proporcion es pequena (p. 14). Tabla de reporte con
-#           poblacion, muestra, directo, Fay-Herriot, errores y CV (p. 13).
-#           -> validacion f y g, secciones 6.4 a 6.6.
-#
-# Fuentes de metodologia:
-#   Fay, R. y Herriot, R. (1979). Estimates of income for small places: an
-#     application of James-Stein procedures to census data. Journal of the
-#     American Statistical Association, 74(366), 269-277.
-#   Molina, I. y Marhuenda, Y. (2015). sae: An R Package for Small Area
-#     Estimation. The R Journal, 7(1), 81-98.
-#   Corral, P., Molina, I., Cojocaru, A. y Segovia, S. (2022). Guidelines to
-#     Small Area Estimation for Poverty Mapping. Banco Mundial.
-#   MDSF-CEPAL (2021). Estimaciones comunales de pobreza por ingresos en Chile
-#     mediante metodos de estimacion en areas pequenas [Informe metodologico].
-#   You, Y. (2008). Small area estimation using area level models with model
-#     checking and applications. SSC Annual Meeting, Proceedings of the Survey
-#     Methods Section. (Varianza suavizada, seccion 2.)
-#   INEC (2025). Aproximacion metodologica para la evaluacion de la precision
-#     de la inferencia estadistica en encuestas de hogares.
-#   Franco, C. (2020). Comparison of small area models for estimation of U.S.
-#     county poverty rates of school aged children using an artificial
-#     population and a design-based simulation. U.S. Census Bureau, RRS 2020-04.
-#   INEC (2018). Estimacion en areas pequenas sobre desnutricion cronica
-#     infantil en Ecuador [Presentacion]. CEPAL.
-# El sustento de cada variable auxiliar esta en
-# Construccion_variables_auxiliares.docx (fichas 3.1 a 3.8).
-
 
 # 0. PAQUETES, RUTAS Y FUNCIONES DE APOYO --------------------------------------
 
@@ -81,9 +13,8 @@
 library(tidyverse)   # dplyr, tidyr, purrr, ggplot2, stringr, tibble
 library(readxl)      # lectura de los Excel de insumo
 # writexl::write_xlsx exporta los resultados (se llama con prefijo).
-# sae::mseFH ajusta el modelo (Molina y Marhuenda, 2015). No se usa
-# library(sae) porque al adjuntarlo carga MASS, cuya funcion select() tapa a
-# la de dplyr; se llama siempre con el prefijo sae::.
+# sae::mseFH ajusta el modelo (Molina y Marhuenda, 2015).
+# No se usa library(sae) porque al adjuntarlo carga MASS, cuya funcion select() tapa a la de dplyr; se llama siempre con el prefijo sae::.
 if (!requireNamespace("sae", quietly = TRUE)) install.packages("sae")
 stopifnot(requireNamespace("sae", quietly = TRUE),
           requireNamespace("writexl", quietly = TRUE))
@@ -135,9 +66,7 @@ mostrar_etapa("0. Paquetes y rutas", tibble(
 
 ## 1.1 Estimaciones directas (INDICADORES.R) ----
 
-# Una fila por indicador, canton y anio: porcentaje, error estandar en puntos
-# porcentuales, IC95, CV, n del denominador, grados de libertad y marcas de
-# precision INEC (seccion 8.1 de INDICADORES.R).
+# Una fila por indicador, canton y anio: porcentaje, error estandar en puntos porcentuales, IC95, CV, n del denominador, grados de libertad y marcas de precision INEC.
 estimadores <- read_excel(ruta_estimaciones) %>%
   mutate(anio = as.integer(anio),
          codigo_canton = str_pad(as.character(codigo_canton), 4, pad = "0"))
@@ -162,10 +91,9 @@ indicadores_agregados <- read_excel(ruta_indicadores) %>%
          codigo_canton = str_pad(as.character(codigo_canton), 4, pad = "0"))
 stopifnot(all(c(claves_territorio, columnas_indicadores) %in% names(indicadores_agregados)))
 
-## 1.3 Variables auxiliares (SCRIP_VARIABLES_AUXILIARES.R) ----
+## 1.3 Variables auxiliares  ----
 
-# Paso 2. El panel viene en formato largo; el modelo necesita una columna por
-# variable y un valor en todas las areas: 430 canton-anio y ningun vacio.
+# El panel viene en formato largo; el modelo necesita una columna por variable y un valor en todas las areas: 430 canton-anio y ningun vacio.
 auxiliares <- read_excel(ruta_auxiliares) %>%
   mutate(anio = as.integer(anio),
          codigo_canton = str_pad(as.character(codigo_canton), 4, pad = "0")) %>%
@@ -176,11 +104,8 @@ stopifnot(nrow(auxiliares) == 430,
 
 ## 1.4 Poblacion de cada area (proyecciones INEC, revision 2024) ----
 
-# Paso 6. La tabla de reporte incluye el tamano de la poblacion del area.
-# Se usa la poblacion del grupo de referencia de cada indicador: 12 a 17
-# anios (inasistencia), 15 anios y mas (desempleo) y poblacion total (pobreza,
-# NBI adolescente y monoparentalidad; para esta ultima no hay proyeccion de
-# hogares). Archivo generado por SCRIP_POBLACION_CANTONAL.R.
+# La tabla de reporte incluye el tamano de la poblacion del area.
+# Se usa la poblacion del grupo de referencia de cada indicador: 12 a 17 anios (inasistencia), 15 anios y mas (desempleo) y poblacion total (pobreza, NBI adolescente y monoparentalidad; para esta ultima no hay proyeccion de hogares).
 poblacion <- read_excel(ruta_poblacion, sheet = "Total_adolescente") %>%
   rename_with(~ str_squish(stringi::stri_trans_general(.x, "Latin-ASCII"))) %>%
   transmute(anio = as.integer(ANO),
@@ -209,47 +134,32 @@ mostrar_etapa("1. Insumos leidos", tibble(
 
 # 2. SUAVIZADO DE LA VARIANZA DEL ESTIMADOR DIRECTO (GVF) ----------------------
 
-# Paso 1. El Fay-Herriot trata como conocida la varianza de cada estimacion
-# directa. En areas con poca muestra esa varianza es cero o inestable, y con
-# varianza cero el modelo no es aplicable salvo que se obtenga con otro
-# metodo. Se reemplaza, en todas las areas, por una varianza suavizada con
-# efecto de diseno (funcion generalizada de la varianza, GVF):
+# El Fay-Herriot trata como conocida la varianza de cada estimacion directa.
+# En areas con poca muestra esa varianza es cero o inestable, y con varianza cero el modelo no es aplicable salvo que se obtenga con otro metodo.
+# Se reemplaza, en todas las areas, por una varianza suavizada con efecto de diseno (funcion generalizada de la varianza, GVF):
 #
 #   V_i = Deff * pt * (1 - pt) / n_i
 #
-# En palabras:
+# Donde:
 #   V_i   = varianza suavizada del canton-anio i, en escala 0-1.
-#   pt    = proporcion del indicador en la provincia y el anio del canton,
-#           con los factores de expansion de la ENEMDU.
-#   n_i   = registros del denominador del indicador (personas, u hogares en
-#           monoparentalidad).
-#   pt * (1 - pt) / n_i = varianza de una proporcion en un muestreo aleatorio
-#           simple de n_i registros.
-#   Deff  = efecto de diseno: cuantas veces es mayor la varianza por el
-#           muestreo en conglomerados de la ENEMDU. Uno por indicador.
+#   pt    = proporcion del indicador en la provincia y el anio del canton, con los factores de expansion de la ENEMDU.
+#   n_i   = registros del denominador del indicador (personas, u hogares en monoparentalidad).
+#   pt * (1 - pt) / n_i = varianza de una proporcion en un muestreo aleatorio simple de n_i registros.
+#   Deff  = efecto de diseno: cuantas veces es mayor la varianza por el muestreo en conglomerados de la ENEMDU. Uno por indicador.
 #
 # Efecto de diseno del indicador, con las areas ancla:
 #   Deff = suma(V_directa_i) / suma(pt * (1 - pt) / n_i)
-# Area ancla: canton-anio con gl >= 9 (INEC, 2025, p. 22), sin estratos con una
-# sola UPM y con varianza directa mayor que cero.
-# Las areas con varianza directa cero no se usan para calcular el Deff, pero
-# reciben su varianza suavizada y se mantienen en el modelo:
-#   - MDSF-CEPAL (2021, p. 41): las comunas con tasa y varianza nulas no
-#     entraron al ajuste de su GVF, "pero si se obtuvieron las predicciones de
-#     sus varianzas". Alli el motivo es el logaritmo, que aqui no se usa.
-#   - Franco (2020, pp. 4 y 20): con tasas no hace falta retirar los ceros, y
-#     una varianza cero les da un peso indebido.
-#   - Corral et al. (2022, p. 19): la varianza cero aparece en areas con poca
-#     muestra y debe obtenerse con otro metodo.
+# Area ancla: canton-anio con gl >= 9 (INEC, 2025, p. 22), sin estratos con una sola UPM y con varianza directa mayor que cero.
+#   Las areas con varianza directa cero no se usan para calcular el Deff, pero reciben su varianza suavizada y se mantienen en el modelo:
+#   - MDSF-CEPAL (2021, p. 41): las comunas con tasa y varianza nulas no entraron al ajuste de su GVF, "pero si se obtuvieron las predicciones de sus varianzas".
+#     Alli el motivo es el logaritmo, que aqui no se usa.
+#   - Franco (2020, pp. 4 y 20): con tasas no hace falta retirar los ceros, y una varianza cero les da un peso indebido.
+#   - Corral et al. (2022, p. 19): la varianza cero aparece en areas con poca muestra y debe obtenerse con otro metodo.
 #
-# Se usa la proporcion provincial y no la del canton para que la varianza no
-# sea cero cuando la estimacion directa es 0 %.
+# Se usa la proporcion provincial y no la del canton para que la varianza no sea cero cuando la estimacion directa es 0 %.
 #
-# Fuente: You (2008, p. 2) escribe la varianza de una proporcion como
-#   theta_i * (1 - theta_i) * deff_i / n_i, con efecto de diseno suavizado.
-#   Son decisiones propias, que no estan en esa fuente: usar la proporcion
-#   provincial en lugar de theta_i, un solo Deff por indicador calculado con
-#   las areas ancla, y usar gl >= 9 y estratos con mas de una UPM para elegirlas.
+# Fuente: You (2008, p. 2) escribe la varianza de una proporcion como theta_i * (1 - theta_i) * deff_i / n_i, con efecto de diseno suavizado.
+#   Son decisiones propias, que no estan en esa fuente: usar la proporcion provincial en lugar de theta_i, un solo Deff por indicador calculado con las areas ancla, y usar gl >= 9 y estratos con mas de una UPM para elegirlas.
 calcular_proporcion_provincial <- function(d) {
   d %>%
     filter(is.finite(valor_pct), denominador_expandido > 0) %>%
@@ -288,96 +198,62 @@ mostrar_etapa("2. Varianza suavizada con efecto de diseno (GVF), por indicador",
 
 ## 3.1 El modelo ----
 
-# Paso 4. Modelo de area en dos etapas (Fay y Herriot, 1979):
+# Modelo de area en dos etapas (Fay y Herriot, 1979):
 #
 #   Etapa 1, enlace:    theta_i = b0 + b1*x1_i + ... + bk*xk_i + v_i,   v_i ~ N(0, s2_v)
 #   Etapa 2, muestreo:  y_i = theta_i + e_i,                e_i ~ N(0, V_i)
 #
-# En palabras:
+# Donde:
 #   theta_i  = valor verdadero del indicador, que se quiere estimar.
-#   x1...xk  = variables auxiliares del indicador (secciones 4 y 5).
-#   b0...bk  = coeficientes: cada variable se multiplica por su coeficiente y
-#              los productos se suman.
-#   v_i      = efecto propio del canton-anio que las variables no explican;
-#              su varianza s2_v mide la diferencia entre cantones que queda
-#              sin explicar.
+#   x1...xk  = variables auxiliares del indicador.
+#   b0...bk  = coeficientes: cada variable se multiplica por su coeficiente y los productos se suman.
+#   v_i      = efecto propio del canton-anio que las variables no explican; su varianza s2_v mide la diferencia entre cantones que queda sin explicar.
 #   y_i      = estimacion directa de la ENEMDU para el canton-anio i.
-#   e_i      = error de muestreo de la encuesta; su varianza V_i es la
-#              suavizada (GVF, seccion 2) y se trata como conocida.
+#   e_i      = error de muestreo de la encuesta; su varianza V_i es la suavizada (GVF) y se trata como conocida.
 #
 # Estimacion final (EBLUP):
 #   estimacion_i = g_i * y_i + (1 - g_i) * (b0 + b1*x1_i + ... + bk*xk_i)
 #   g_i = s2_v / (s2_v + V_i)
-# En palabras: la estimacion final es un promedio ponderado entre el dato
-# directo y el valor sintetico (lo que predicen las variables). El peso g_i
-# del dato directo es alto cuando su varianza V_i es baja (mucha muestra) y
-# bajo cuando es alta (poca muestra).
+# La estimacion final es un promedio ponderado entre el dato directo y el valor sintetico (lo que predicen las variables).
+# El peso g_i del dato directo es alto cuando su varianza V_i es baja (mucha muestra) y bajo cuando es alta (poca muestra).
 #
-# Estimacion de b y s2_v por maxima verosimilitud restringida (REML), que
-# corrige el sesgo de la varianza del efecto de area; si no converge, metodo
-# de momentos de Fay y Herriot. El error de cada estimacion es la raiz del
-# error cuadratico medio (ECM) de Prasad y Rao, que calcula sae::mseFH
-# (Molina y Marhuenda, 2015).
+# Estimacion de b y s2_v por maxima verosimilitud restringida (REML), que corrige el sesgo de la varianza del efecto de area; si no converge, metodo de momentos de Fay y Herriot.
+# El error de cada estimacion es la raiz del error cuadratico medio (ECM) de Prasad y Rao, que calcula sae::mseFH (Molina y Marhuenda, 2015).
 #
-# Decisiones (GUIA_APLICACION_FAY_HERRIOT.md):
-#   - Entran todas las estimaciones directas con valor, incluidas las de 0 %,
-#     con la varianza suavizada de la GVF (Paso 1, seccion 2); el
-#     estimador pondera cada una segun su varianza.
-#   - Canton-anio sin estimacion directa: reciben el valor sintetico, porque
-#     el modelo "can provide estimates for non-sampled areas based on the
-#     regression-synthetic component" (Corral et al., 2022, p. 25). Se marcan
-#     con tipo_estimacion = "solo_sintetico". Precedente: MDSF (2019, p. 17).
-#   - Escala: el indicador entra como proporcion (0-1), sin transformar, y se
-#     multiplica por 100 al exportar; pueden resultar estimaciones negativas
-#     (Paso 6). Las auxiliares entran en su escala original, sin transformar
-#     (MDSF-CEPAL, 2021, p. 50, nota 23).
-#   - Variables de cada indicador: relacion teorica con el indicador y
-#     seleccion segun el Paso 3.
-#   - Intervalo de confianza al 95 %: estimacion +/- 1,96 * raiz(ECM), por
-#     aproximacion normal.
+# Decisiones:
+#   - Entran todas las estimaciones directas con valor, incluidas las de 0 %, con la varianza suavizada de la GVF con efecto de diseno; el estimador pondera cada una segun su varianza.
+#   - Canton-anio sin estimacion directa: reciben el valor sintetico, porque el modelo "can provide estimates for non-sampled areas based on the regression-synthetic component" (Corral et al., 2022, p. 25).
+#     Se marcan con tipo_estimacion = "solo_sintetico".
+#     Precedente: MDSF (2019, p. 17).
+#   - Escala: el indicador entra como proporcion (0-1), sin transformar, y se multiplica por 100 al exportar.
+#     Las auxiliares entran en su escala original, sin transformar (MDSF-CEPAL, 2021, p. 50, nota 23).
+#   - Variables de cada indicador: relacion teorica con el indicador y seleccion por su significancia.
+#   - Intervalo de confianza al 95 %: estimacion +/- 1,96 * raiz(ECM), por aproximacion normal.
 
 ## 3.2 Validacion ----
 
-# Se revisa despues de ajustar el modelo, en el orden de los Pasos 3, 5 y 6:
-#   Paso 3, seleccion de variables:
-#   a. Coeficientes: significancia (p < 0,05) y signo esperado.
-#   b. Ajuste: parte de la variacion entre areas que explican las auxiliares,
-#      1 - s2_v(con auxiliares) / s2_v(sin auxiliares).
-#   Paso 5, diagnostico:
-#   c. Colinealidad: factor de inflacion de la varianza (VIF), a revisar si es
-#      mayor que 5.
-#   d. Areas influyentes: distancia de Cook mayor que 4/C, con C = numero de
-#      areas. sae::mseFH no la calcula; se aproxima con la regresion de la
-#      parte sintetica ponderada por 1 / (s2_v + V_i).
-#   e. Normalidad: Shapiro-Wilk y graficos Q-Q de los residuos estandarizados
-#      y de los efectos de area. Las estimaciones puntuales no requieren
-#      normalidad ("The BLUP does not require normality assumptions"; Corral
-#      et al., 2022, p. 27); si no se cumple, el ECM debe interpretarse con
-#      cuidado (p. 28).
-#   h. Linealidad: grafico de los residuos estandarizados contra cada variable
-#      auxiliar, con una curva suavizada; si la curva se aleja de la linea
-#      horizontal en cero, la relacion no es lineal.
-#   i. Dispersion de residuos: residuo estandarizado contra el valor
-#      sintetico, como en el antecedente del INEC (2018, diapositiva 26); los
-#      puntos deben repartirse sin forma alrededor de cero y casi todos dentro
-#      de +/- 1,96.
-#   Paso 6, revision final:
-#   f. Estimaciones fuera de 0-100.
-#   g. Precision: error del Fay-Herriot (raiz del ECM) frente al error del
-#      dato directo que entra al modelo (GVF, seccion 2). Tambien se reporta el CV, pero
-#      en proporciones el CV crece cuando la proporcion es pequena.
+# Se revisa despues de ajustar el modelo:
+#   a. Significancia de las variables (p < 0,05).
+#   b. Ajuste: parte de la variacion entre areas que explican las auxiliares, 1 - s2_v(con auxiliares) / s2_v(sin auxiliares), y aporte de cada una.
+#   c. Colinealidad: factor de inflacion de la varianza (VIF), a revisar si es mayor que 5 (Corral et al., 2022, p. 21).
+#   g. Precision: error del Fay-Herriot (raiz del ECM) frente al error del dato directo que entra al modelo (GVF).
+#   i. Dispersion de residuos: residuo estandarizado contra el valor sintetico; los puntos deben repartirse alrededor de cero y casi todos dentro de +/- 1,96.
+#     Su desviacion estandar debe estar cerca de 1.
+#   j. Variacion que las variables no explican, sigma_u = raiz(s2_v), y peso del dato directo (minimo, mediana y maximo).
+#   k. Concordancia con la provincia: razon R entre el dato directo de la provincia y el promedio Fay-Herriot de sus cantones.
 #   Residuo estandarizado del area i = (y_i - sintetico_i) / raiz(s2_v + V_i).
 #   Efecto de area estimado        = estimacion_i - sintetico_i.
+#   Peso del dato directo          = s2_v / (s2_v + V_i).
+
 
 ## 3.3 Funcion de ajuste y validacion ----
 
-# Ajusta el Fay-Herriot de un indicador con sus variables auxiliares y
-# devuelve: estimaciones por area, coeficientes, validacion, diagnosticos por
-# area y grafico Q-Q.
-#   indicador      = codigo del indicador en estimaciones_originales.xlsx
+# Ajusta el Fay-Herriot de un indicador con sus variables auxiliares y devuelve: estimaciones por area, coeficientes, atributos de validacion y residuos por area.
+#   indicador_fh   = codigo del indicador en estimaciones_originales.xlsx
 #   variables      = nombres de las variables auxiliares en el panel
-#   signo_esperado = +1 si a mayor variable se espera mayor indicador; -1 si
-#                    se espera lo contrario (uno por variable)
+#   signo_esperado = relacion que se plantea entre cada variable y el indicador
+
+
 ajustar_fay_herriot <- function(indicador_fh, variables, signo_esperado) {
   stopifnot(length(variables) == length(signo_esperado), all(variables %in% names(auxiliares)))
   d <- datos_varianza %>%
@@ -396,7 +272,7 @@ ajustar_fay_herriot <- function(indicador_fh, variables, signo_esperado) {
     if (!is.null(intento) && isTRUE(intento$est$fit$convergence)) { ajuste <- intento; break }
   }
   if (is.null(ajuste)) stop("No convergio Fay-Herriot: ", indicador_fh)
-  # Modelo sin variables auxiliares, solo para medir el ajuste (3.2 b)
+  # Modelo sin variables auxiliares, solo para medir el ajuste
   nulo <- sae::mseFH(prop ~ 1, vardir = vardir, method = metodo)
 
   beta <- ajuste$est$fit$estcoef$beta
@@ -420,9 +296,8 @@ ajustar_fay_herriot <- function(indicador_fh, variables, signo_esperado) {
               fuera_de_rango = as.integer(eblup < 0 | eblup > 1),
               tipo_estimacion = "fay_herriot")
 
-  # Canton-anio sin estimacion directa (sin muestra): reciben solo el valor
-  # sintetico, porque sin encuesta el peso del dato directo es cero (seccion
-  # 3.1). Error = raiz(s2_v + g2), donde g2 es el error por estimar b:
+  # Canton-anio sin estimacion directa (sin muestra): reciben solo el valor sintetico, porque sin encuesta el peso del dato directo es cero.
+  # Error = raiz(s2_v + g2), donde g2 es el error por estimar b:
   #   g2_i = x_i' (sum_j x_j x_j' / (s2_v + V_j))^(-1) x_i
   faltan <- estimadores %>%
     filter(indicador == indicador_fh, !is.finite(valor_pct)) %>%
@@ -496,7 +371,7 @@ ajustar_fay_herriot <- function(indicador_fh, variables, signo_esperado) {
     error_solo_sintetico_mediana_pp = if (any(!con_muestra))
       median(estimaciones$error_fh_pp[!con_muestra]) else NA_real_)
 
-  # Datos para el grafico de linealidad (3.2 h): residuo contra cada variable
+  # Datos para el grafico de linealidad: residuo contra cada variable
   linealidad <- d %>%
     transmute(indicador, residuo_estandarizado = residuo, across(all_of(variables))) %>%
     pivot_longer(all_of(variables), names_to = "variable", values_to = "valor_variable")
@@ -534,20 +409,14 @@ mostrar_etapa("3. Funciones del modelo Fay-Herriot definidas")
 
 # 4. MODELO CON LAS VARIABLES AUXILIARES CANDIDATAS ----------------------------
 
-# Paso 3. Para cada indicador se ajusta el modelo con todas sus variables
-# auxiliares candidatas (Corral et al., 2022, p. 21). Una candidata es una
-# variable con relacion teorica con el indicador (p. 28); la relacion de cada
-# una esta en Construccion_variables_auxiliares.docx.
+# Para cada indicador se ajusta el modelo con todas sus variables auxiliares candidatas (Corral et al., 2022, p. 21).
+# Una candidata es una variable con relacion teorica con el indicador (p. 28).
 # Reglas de las candidatas:
-#   - BDH general y BDH con componente variable no van en el mismo modelo: el
-#     segundo esta contenido en el primero (fichas 3.5 y 3.6).
-#   - La matricula particular solo es candidata de pobreza (ficha 3.2).
-# Criterio: una variable se conserva si su coeficiente es significativo
-# (p < 0,05); las demas se retiran porque "may introduce noise" (p. 104). Se
-# revisa tambien el VIF (mayor que 5, pp. 21 y 106).
-# Signo esperado: +1, -1 o NA si no hay una expectativa definida.
-# Los resultados de esta seccion quedan en objetos de R y se ven en consola; a
-# Excel solo se exporta el modelo de la seccion 5.
+#   - BDH general y BDH con componente variable no van en el mismo modelo: el segundo esta contenido en el primero.
+#   - La matricula particular solo es candidata de pobreza.
+# Criterio: una variable se conserva si su coeficiente es significativo (p < 0,05); las demas se retiran porque "may introduce noise" (p. 104).
+# Se revisa tambien el VIF (mayor que 5, pp. 21 y 106).
+
 
 # Tabla de significancia de un indicador.
 tabla_significancia <- function(ajuste) {
@@ -575,8 +444,9 @@ mostrar_candidatas <- function(ajuste, titulo) {
 
 ## 4.1 Inasistencia de 12 a 17 anios ----
 
-#   theta_i = b0 + b1*abandono_escolar_i + b2*bdh_general_i
-#             + b3*poblacion_urbana_i + b4*empleo_formal_i + v_i
+#   theta_i = b0 + b1*abandono_escolar_i + b2*bdh_general_i + b3*poblacion_urbana_i + b4*empleo_formal_i + v_i
+# Se mantienen abandono_escolar y bdh_general, significativas y con el signo esperado.
+# poblacion_urbana y empleo_formal no son significativas y se retiran.
 cand_inasistencia <- ajustar_fay_herriot(
   "inasistencia_12_17",
   c("abandono_escolar", "bdh_general", "poblacion_urbana", "empleo_formal"),
@@ -586,6 +456,8 @@ mostrar_candidatas(cand_inasistencia, "4.1 Inasistencia 12-17")
 ## 4.2 Desempleo ----
 
 #   theta_i = b0 + b1*empleo_formal_i + b2*poblacion_urbana_i + v_i
+# Se mantiene poblacion_urbana, significativa y con el signo esperado.
+# empleo_formal: se esperaba negativo y salio positivo, pero no es significativa y se retira.
 cand_desempleo <- ajustar_fay_herriot(
   "desempleo_general",
   c("empleo_formal", "poblacion_urbana"),
@@ -594,8 +466,10 @@ mostrar_candidatas(cand_desempleo, "4.2 Desempleo")
 
 ## 4.3 Pobreza por ingresos ----
 
-#   theta_i = b0 + b1*bdh_general_i + b2*salario_basico_i
-#             + b3*matricula_particular_i + b4*poblacion_urbana_i + v_i
+#   theta_i = b0 + b1*bdh_general_i + b2*salario_basico_i + b3*matricula_particular_i + b4*poblacion_urbana_i + v_i
+# Se mantiene bdh_general, significativa y con el signo esperado.
+# salario_basico: se esperaba positivo y salio negativo, pero es significativa, por lo que pasa al modelo con las seleccionadas.
+# matricula_particular y poblacion_urbana no son significativas y se retiran.
 cand_pobreza <- ajustar_fay_herriot(
   "pobreza_ingresos",
   c("bdh_general", "salario_basico", "matricula_particular", "poblacion_urbana"),
@@ -604,8 +478,9 @@ mostrar_candidatas(cand_pobreza, "4.3 Pobreza por ingresos")
 
 ## 4.4 NBI adolescente ----
 
-#   theta_i = b0 + b1*bdh_variable_i + b2*abandono_escolar_i
-#             + b3*poblacion_urbana_i + v_i
+#   theta_i = b0 + b1*bdh_variable_i + b2*abandono_escolar_i + b3*poblacion_urbana_i + v_i
+# Se mantiene bdh_variable, significativa y con el signo esperado.
+# abandono_escolar: se esperaba positivo y salio negativo, pero no es significativa y se retira, igual que poblacion_urbana.
 cand_nbi <- ajustar_fay_herriot(
   "adolescentes_nbi_sobre_total_provisional",
   c("bdh_variable", "abandono_escolar", "poblacion_urbana"),
@@ -615,6 +490,7 @@ mostrar_candidatas(cand_nbi, "4.4 NBI adolescente")
 ## 4.5 Hogares monoparentales con menores ----
 
 #   theta_i = b0 + b1*nacidos_sin_pareja_i + b2*poblacion_urbana_i + v_i
+# Se mantienen las dos, significativas y con el signo esperado.
 cand_monoparentalidad <- ajustar_fay_herriot(
   "monoparental_jefatura_aproximacion",
   c("nacidos_sin_pareja", "poblacion_urbana"),
@@ -624,19 +500,17 @@ mostrar_candidatas(cand_monoparentalidad, "4.5 Monoparentalidad")
 
 # 5. MODELO CON LAS VARIABLES AUXILIARES SELECCIONADAS --------------------------
 
-# Paso 4. Se vuelve a ajustar el modelo de cada indicador con las variables
-# significativas de la seccion 4 (Corral et al., 2022, pp. 21 y 104). Un modelo
-# por indicador (pp. 25 y 28). Este es el modelo final.
-# Las variables se escriben en cada apartado, junto a su formula. La funcion
-# comprobar_seleccion detiene el script si no son las significativas de la
-# seccion 4, o si alguna deja de serlo al volver a ajustar.
+# Se vuelve a ajustar el modelo de cada indicador con las variables significativas (Corral et al., 2022, pp. 21 y 104).
+# Un modelo por indicador (pp. 25 y 28).
+# Este es el modelo final.
+
 # En las formulas, i = canton-anio.
 comprobar_seleccion <- function(final, candidatas) {
   significativas <- tabla_significancia(candidatas) %>%
     filter(significativa == "si") %>% pull(variable)
   usadas <- setdiff(final$coeficientes$termino, "(constante)")
   if (!setequal(significativas, usadas))
-    stop("Variables distintas a las significativas de la seccion 4 en ",
+    stop("Variables distintas a las significativas en ",
          first(final$coeficientes$indicador), ". Significativas: ",
          paste(significativas, collapse = ", "))
   if (any(tabla_significancia(final)$significativa == "no"))
@@ -648,22 +522,17 @@ comprobar_seleccion <- function(final, candidatas) {
 
 # Enlace:
 #   theta_i = b0 + b1 * abandono_escolar_i + b2 * bdh_general_i + v_i
-# En palabras:
-#   theta_i               = porcentaje verdadero de adolescentes de 12 a 17
-#                           anios que no asisten a educacion.
+# Donde:
+#   theta_i               = porcentaje verdadero de adolescentes de 12 a 17 anios que no asisten a educacion.
 #   b0                    = constante del modelo.
-#   b1 * abandono_escolar = aporte de la tasa de abandono escolar de 8.o de
-#                           EGB a 3.o de Bachillerato (%), multiplicada por su
-#                           coeficiente.
-#   b2 * bdh_general      = aporte de los hogares con BDH por cada 100
-#                           habitantes, multiplicados por su coeficiente.
+#   b1 * abandono_escolar = aporte de la tasa de abandono escolar de 8.o de EGB a 3.o de Bachillerato (%), multiplicada por su coeficiente.
+#   b2 * bdh_general      = aporte de los hogares con BDH por cada 100 habitantes, multiplicados por su coeficiente.
 #   v_i                   = efecto propio del canton-anio.
 # Estimacion final:
 #   estimacion_i = g_i * directo_i + (1 - g_i) * (b0 + b1*abandono_i + b2*bdh_i)
-# Signos esperados: positivo en las dos variables.
-# Sustento de las variables: fichas 3.1 y 3.5 del documento (Arias et al.,
-# 2022, p. 69; INEC, 2026b, p. 131; Trucco et al., 2026, p. 14; Cecchini y
-# Atuesta, 2017, p. 18).
+# Por que se relacionan:
+#   abandono_escolar: quien abandona el grado sale del sistema educativo (Arias et al., 2022, p. 52), por lo que con mas abandono se espera mas adolescentes que no asisten.
+#   bdh_general: el bono se dirige a nucleos familiares en pobreza o extrema pobreza (INEC, 2026b, p. 131) y las mayores brechas para terminar la secundaria se dan entre niveles socioeconomicos (Trucco et al., 2026, p. 14), por lo que con mas hogares con bono se espera mas inasistencia.
 fh_inasistencia <- ajustar_fay_herriot("inasistencia_12_17",
                                        c("abandono_escolar", "bdh_general"), c(1, 1))
 comprobar_seleccion(fh_inasistencia, cand_inasistencia)
@@ -673,16 +542,15 @@ mostrar_resultados(fh_inasistencia, "5.1 Inasistencia 12-17")
 
 # Enlace:
 #   theta_i = b0 + b1 * poblacion_urbana_i + v_i
-# En palabras:
+# Donde:
 #   theta_i               = tasa de desempleo verdadera (% de la PEA).
 #   b0                    = constante del modelo.
-#   b1 * poblacion_urbana = aporte del porcentaje de poblacion que vive en el
-#                           area urbana, multiplicado por su coeficiente.
+#   b1 * poblacion_urbana = aporte del porcentaje de poblacion que vive en el area urbana, multiplicado por su coeficiente.
 #   v_i                   = efecto propio del canton-anio.
 # Estimacion final:
 #   estimacion_i = g_i * directo_i + (1 - g_i) * (b0 + b1*urbana_i)
-# Signo esperado: positivo (desempleo urbano mayor que el rural; INEC, 2026f).
-# Sustento de la variable: ficha 3.8 del documento (INEC, 2024; INEC, 2026f).
+# Por que se relacionan:
+#   poblacion_urbana: en diciembre de 2025 el desempleo fue de 3,2 % en el area urbana y de 1,5 % en la rural (INEC, 2026f), por lo que con mas poblacion urbana se espera mas desempleo.
 fh_desempleo <- ajustar_fay_herriot("desempleo_general", "poblacion_urbana", 1)
 comprobar_seleccion(fh_desempleo, cand_desempleo)
 mostrar_resultados(fh_desempleo, "5.2 Desempleo")
@@ -691,24 +559,21 @@ mostrar_resultados(fh_desempleo, "5.2 Desempleo")
 
 # Enlace:
 #   theta_i = b0 + b1 * bdh_general_i + b2 * salario_basico_i + v_i
-# En palabras:
+# Donde:
 #   theta_i             = tasa de pobreza por ingresos verdadera (% de personas).
 #   b0                  = constante del modelo.
-#   b1 * bdh_general    = aporte de los hogares con BDH por cada 100
-#                         habitantes, multiplicados por su coeficiente.
-#   b2 * salario_basico = aporte del porcentaje de trabajadores formales cuyo
-#                         sueldo a 30 dias es menor o igual al salario basico,
-#                         multiplicado por su coeficiente.
+#   b1 * bdh_general    = aporte de los hogares con BDH por cada 100 habitantes, multiplicados por su coeficiente.
+#   b2 * salario_basico = aporte del porcentaje de trabajadores formales cuyo sueldo a 30 dias es menor o igual al salario basico, multiplicado por su coeficiente.
 #   v_i                 = efecto propio del canton-anio.
 # Estimacion final:
 #   estimacion_i = g_i * directo_i + (1 - g_i) * (b0 + b1*bdh_i + b2*salario_i)
-# Signos esperados: positivo en las dos variables.
-# El modelo busca prediccion, no causalidad: "este modelo no busca determinar
-# causalidad, sino unicamente correlaciones para tener un buen poder
-# predictivo" (MDSF, 2019, p. 24).
-# Sustento de las variables: fichas 3.4 y 3.5 del documento (INEC, 2023,
-# p. 51; MDSF Chile, 2019, pp. 12 y 19; Cecchini y Atuesta, 2017, pp. 21 y 55;
-# MDH, 2025a, p. 9).
+# Por que se relacionan:
+#   bdh_general: el bono se dirige a nucleos familiares en pobreza o extrema pobreza (INEC, 2026b, p. 131), por lo que con mas hogares con bono se espera mas pobreza.
+#   salario_basico: Chile usa en su modelo de pobreza el porcentaje de afiliados con remuneracion inferior al salario minimo (MDSF, 2019, p. 12), por lo que con mas trabajadores en el salario basico se espera mas pobreza.
+# Por que se mantiene salario_basico: se esperaba positivo y en los dos modelos salio negativo.
+# Se mantiene porque es significativa, aporta a lo que explica el modelo y no repite informacion con bdh_general (VIF), y porque el modelo busca predecir y no determinar causalidad (MDSF, 2019, p. 24).
+# En esa misma pagina Chile mantiene el promedio de ingresos, cuyo signo no fue el esperado, porque le interesa la prediccion.
+# Su signo no se interpreta como causa.
 fh_pobreza <- ajustar_fay_herriot("pobreza_ingresos",
                                   c("bdh_general", "salario_basico"), c(1, 1))
 comprobar_seleccion(fh_pobreza, cand_pobreza)
@@ -718,21 +583,16 @@ mostrar_resultados(fh_pobreza, "5.3 Pobreza por ingresos")
 
 # Enlace:
 #   theta_i = b0 + b1 * bdh_variable_i + v_i
-# En palabras:
-#   theta_i           = porcentaje verdadero de adolescentes de 12 a 17 anios
-#                       en hogares pobres por NBI, sobre la poblacion total.
+# Donde:
+#   theta_i           = porcentaje verdadero de adolescentes de 12 a 17 anios en hogares pobres por NBI, sobre la poblacion total.
 #   b0                = constante del modelo.
-#   b1 * bdh_variable = aporte de los hogares con BDH con componente variable
-#                       por cada 100 habitantes, multiplicados por su
-#                       coeficiente.
+#   b1 * bdh_variable = aporte de los hogares con BDH con componente variable por cada 100 habitantes, multiplicados por su coeficiente.
 #   v_i               = efecto propio del canton-anio.
 # Estimacion final:
 #   estimacion_i = g_i * directo_i + (1 - g_i) * (b0 + b1*bdh_variable_i)
-# Signo esperado: positivo.
-# El modelo admite un vector de covariables de cualquier tamano (Corral et
-# al., 2022, ec. 3.1, p. 27).
-# Sustento de la variable: ficha 3.6 del documento (Cecchini y Atuesta, 2017,
-# pp. 21 y 55; INEC, 2026b, p. 132).
+# Por que se relacionan:
+#   bdh_variable: este bono se dirige a nucleos familiares en extrema pobreza con hijos menores de 18 anios (INEC, 2026b, p. 132), por lo que con mas hogares con este bono se espera mas adolescentes en hogares con NBI.
+# El modelo admite una o varias variables (Corral et al., 2022, p. 27).
 fh_nbi <- ajustar_fay_herriot("adolescentes_nbi_sobre_total_provisional",
                               "bdh_variable", 1)
 comprobar_seleccion(fh_nbi, cand_nbi)
@@ -742,21 +602,17 @@ mostrar_resultados(fh_nbi, "5.4 NBI adolescente")
 
 # Enlace:
 #   theta_i = b0 + b1 * nacidos_sin_pareja_i + b2 * poblacion_urbana_i + v_i
-# En palabras:
-#   theta_i                 = porcentaje verdadero de hogares monoparentales
-#                             con menores de 18 anios.
+# Donde:
+#   theta_i                 = porcentaje verdadero de hogares monoparentales con menores de 18 anios.
 #   b0                      = constante del modelo.
-#   b1 * nacidos_sin_pareja = aporte del porcentaje de nacidos vivos de
-#                             madres solteras, divorciadas, separadas o
-#                             viudas, multiplicado por su coeficiente.
-#   b2 * poblacion_urbana   = aporte del porcentaje de poblacion urbana,
-#                             multiplicado por su coeficiente.
+#   b1 * nacidos_sin_pareja = aporte del porcentaje de nacidos vivos de madres solteras, divorciadas, separadas o viudas, multiplicado por su coeficiente.
+#   b2 * poblacion_urbana   = aporte del porcentaje de poblacion urbana, multiplicado por su coeficiente.
 #   v_i                     = efecto propio del canton-anio.
 # Estimacion final:
 #   estimacion_i = g_i * directo_i + (1 - g_i) * (b0 + b1*nacidos_i + b2*urbana_i)
-# Signos esperados: positivo en las dos variables.
-# Sustento de las variables: fichas 3.7 y 3.8 del documento (INEC, 2026c;
-# INEC, 2024; Ullmann, Maldonado y Rico, 2014, pp. 26 y 30).
+# Por que se relacionan:
+#   nacidos_sin_pareja: recoge el estado civil o conyugal de la madre (INEC, 2025b), por lo que con mas nacidos de madres sin pareja se espera mas hogares con un solo jefe e hijos menores.
+#   poblacion_urbana: las familias monoparentales pueden resultar de la ruptura de uniones, dentro de cambios familiares que se asocian con la urbanizacion (Ullmann, Maldonado y Rico, 2014, pp. 26 y 30), por lo que con mas poblacion urbana se espera mas monoparentalidad.
 fh_monoparentalidad <- ajustar_fay_herriot("monoparental_jefatura_aproximacion",
                                            c("nacidos_sin_pareja", "poblacion_urbana"), c(1, 1))
 comprobar_seleccion(fh_monoparentalidad, cand_monoparentalidad)
@@ -765,8 +621,7 @@ mostrar_resultados(fh_monoparentalidad, "5.5 Monoparentalidad")
 ## 5.6 Comparacion del modelo con las candidatas y con las seleccionadas ----
 
 #   explica_pct = parte de la diferencia entre areas que explican las variables
-#   cambio_mediano_pp y cambio_maximo_pp = cuanto cambia la estimacion de los
-#                 canton-anio con muestra entre un modelo y otro
+#   cambio_mediano_pp y cambio_maximo_pp = cuanto cambia la estimacion de los canton-anio con muestra entre un modelo y otro
 comparar_modelos <- function(candidatas, final) {
   atributos <- function(a, modelo) a$validacion %>%
     transmute(indicador, modelo, variables, explica_pct, vif_maximo, error_fh_mediana_pp,
@@ -814,8 +669,8 @@ mostrar_etapa("6.1 Coeficientes no significativos (p >= 0,05) o con signo distin
 
 ## 6.2 Estimadores del Fay-Herriot (formato largo) ----
 
-# Misma estructura que estimaciones_originales.xlsx: una fila por indicador,
-# canton y anio. Los canton-anio sin estimacion directa reciben el valor
+# Misma estructura que estimaciones_originales.xlsx: una fila por indicador, canton y anio.
+# Los canton-anio sin estimacion directa reciben el valor
 # sintetico (tipo_estimacion = "solo_sintetico").
 estimadores_fh <- estimadores %>%
   select(anio, codigo_provincia, provincia, codigo_canton, canton, indicador,
@@ -833,8 +688,7 @@ estimadores_fh <- estimadores %>%
 
 ## 6.3 Indicadores del Fay-Herriot (formato ancho) ----
 
-# Misma estructura que construccion_indicadores_factores.xlsx: una fila por
-# canton-anio y una columna por indicador.
+# Misma estructura que construccion_indicadores_factores.xlsx: una fila por canton-anio y una columna por indicador.
 indicadores_fh <- indicadores_agregados %>%
   select(all_of(claves_territorio)) %>%
   left_join(estimadores_fh %>%
@@ -848,9 +702,8 @@ stopifnot(nrow(indicadores_fh) == nrow(indicadores_agregados),
 
 ## 6.4 Comparacion: original, GVF y Fay-Herriot (formato largo) ----
 
-# Paso 6. Una fila por canton, anio e indicador, con las tres etapas una al
-# lado de la otra: estimacion directa, error con la varianza suavizada (GVF) y
-# estimacion del Fay-Herriot. Incluye la poblacion del area (seccion 1.4).
+# Una fila por canton, anio e indicador, con las tres etapas una al lado de la otra: estimacion directa, error con la varianza suavizada (GVF) y estimacion del Fay-Herriot.
+# Incluye la poblacion del area.
 comparacion <- estimadores %>%
   left_join(estimaciones_fh, by = c("anio", "codigo_canton", "indicador")) %>%
   left_join(poblacion_area, by = c("anio", "codigo_canton", "indicador")) %>%
@@ -867,7 +720,7 @@ comparacion <- estimadores %>%
             # Varianza suavizada (GVF)
             error_gvf_pp,
             cv_gvf_pct = if_else(valor_pct > 0, 100 * error_gvf_pp / valor_pct, NA_real_),
-            # Error que entra al modelo: el de la GVF (seccion 2)
+            # Error que entra al modelo: el de la GVF
             error_modelo_pp,
             # Fay-Herriot
             valor_sintetico_pct, peso_dato_original,
@@ -890,24 +743,19 @@ mostrar_etapa("6.2-6.4 Tablas de salida", tibble(
 
 ## 6.5 Comparacion con la provincia (validacion, no corrige) ----
 
-# La ENEMDU da un dato mas confiable para la provincia que para el canton. Se
-# compara, por indicador, provincia y anio, el dato directo de la provincia
-# con el promedio de las estimaciones Fay-Herriot de sus cantones:
+# La ENEMDU da un dato mas confiable para la provincia que para el canton.
+# Se compara, por indicador, provincia y anio, el dato directo de la provincia con el promedio de las estimaciones Fay-Herriot de sus cantones:
 #
 #   R = directo_provincia / promedio_FH
 #   directo_provincia = suma(w_i * directo_i) / suma(w_i)
 #   promedio_FH       = suma(w_i * FH_i)      / suma(w_i)
 #
-# En palabras: w_i es la suma de los factores de expansion del denominador del
-# canton. Los dos promedios usan los mismos cantones, los que tienen muestra.
-# Si R esta cerca de 1, el modelo concuerda con la provincia (MDSF, 2019,
-# p. 11). La razon R es la del ajuste de MDSF-CEPAL (2021, p. 53), que la
-# calcula con poblaciones.
-# Aqui R solo se reporta: no se multiplica ninguna estimacion, porque el
-# ajuste no se recomienda salvo que la publicacion lo exija, y las diferencias
-# grandes pueden indicar que no se cumplen los supuestos (Corral et al., 2022,
-# p. 80, en el capitulo de modelos a nivel de unidad). El dato de la provincia
-# tambien tiene error de muestreo.
+# w_i es la suma de los factores de expansion del denominador del canton.
+# Los dos promedios usan los mismos cantones, los que tienen muestra.
+# Si R esta cerca de 1, el modelo concuerda con la provincia (MDSF, 2019, p. 11).
+# La razon R es la del ajuste de MDSF-CEPAL (2021, p. 53), que la calcula con poblaciones.
+# Aqui R solo se reporta: no se multiplica ninguna estimacion, porque el ajuste no se recomienda salvo que la publicacion lo exija, y las diferencias grandes pueden indicar que no se cumplen los supuestos (Corral et al., 2022, p. 80, en el capitulo de modelos a nivel de unidad).
+# El dato de la provincia tambien tiene error de muestreo.
 comparacion_provincia <- estimadores %>%
   filter(is.finite(valor_pct), denominador_expandido > 0) %>%
   inner_join(select(estimaciones_fh, anio, codigo_canton, indicador, valor_fh_pct),
@@ -937,20 +785,14 @@ mostrar_etapa("6.5 Comparacion con la provincia (R cerca de 1)",
 #   indicadores_fay_herriot.xlsx               indicadores del Fay-Herriot (ancho)
 #   estimaciones_fay_herriot.xlsx              estimadores del Fay-Herriot (largo)
 #   comparacion_original_gvf_fay_herriot.xlsx  original, GVF y Fay-Herriot (largo)
-#   validacion_fay_herriot.xlsx                resumen, coeficientes, GVF,
-#                                              diagnosticos por area y
-#                                              comparacion con la provincia
+#   validacion_fay_herriot.xlsx                resumen, coeficientes, GVF, diagnosticos por area y comparacion con la provincia
 # Imagenes en SCRIPTS/SALIDAS_EXPLORACIONES/salidas_estimacion_areas_pequenas:
 #   validacion_qq_fay_herriot.png              graficos Q-Q de los cinco modelos
-#   validacion_linealidad_fay_herriot.png      residuos contra cada variable (3.2 h)
-#   validacion_dispersion_residuos_fay_herriot.png
-#                                              residuos contra valor sintetico (3.2 i)
-#   comparacion_directo_fay_herriot.png        directo contra Fay-Herriot (figura
-#                                              3.2 de Corral et al., 2022, p. 24)
-#   comparacion_provincia_fay_herriot.png      dato de la provincia contra
-#                                              promedio de sus cantones (6.5)
-#   comparacion_error_fay_herriot.png          error del directo contra error
-#                                              del Fay-Herriot (misma figura)
+#   validacion_linealidad_fay_herriot.png      residuos contra cada variable
+#   validacion_dispersion_residuos_fay_herriot.png  residuos contra valor sintetico
+#   comparacion_directo_fay_herriot.png        directo contra Fay-Herriot (figura 3.2 de Corral et al., 2022, p. 24)
+#   comparacion_provincia_fay_herriot.png      dato de la provincia contra promedio de sus cantones
+#   comparacion_error_fay_herriot.png          error del directo contra error del Fay-Herriot (misma figura)
 if (isTRUE(exportar_tabla)) {
   writexl::write_xlsx(list(Indicadores_fay_herriot = indicadores_fh),
                       file.path(carpeta_salida, "indicadores_fay_herriot.xlsx"))
@@ -978,7 +820,7 @@ if (isTRUE(exportar_tabla)) {
     theme_minimal(base_size = 9)
   ggsave(file.path(carpeta_img, "validacion_qq_fay_herriot.png"), grafico_qq_todos,
          width = 14, height = 6, dpi = 150)
-  # Linealidad (3.2 h): curva suavizada (loess) sobre los residuos
+  # Linealidad: curva suavizada (loess) sobre los residuos
   grafico_linealidad <- linealidad_fh %>%
     mutate(panel = paste(indicador, variable, sep = "\n")) %>%
     ggplot(aes(valor_variable, residuo_estandarizado)) +
@@ -991,8 +833,7 @@ if (isTRUE(exportar_tabla)) {
     theme_minimal(base_size = 9)
   ggsave(file.path(carpeta_img, "validacion_linealidad_fay_herriot.png"), grafico_linealidad,
          width = 12, height = 7, dpi = 150)
-  # Dispersion de residuos (3.2 i): residuo estandarizado contra el valor
-  # sintetico; los puntos deben repartirse sin forma alrededor de cero
+  # Dispersion de residuos: residuo estandarizado contra el valor sintetico; los puntos deben repartirse sin forma alrededor de cero
   grafico_dispersion <- diagnosticos_fh %>%
     left_join(select(estimaciones_fh, anio, codigo_canton, indicador, valor_sintetico_pct),
               by = c("anio", "codigo_canton", "indicador")) %>%
@@ -1021,7 +862,7 @@ if (isTRUE(exportar_tabla)) {
     theme_minimal(base_size = 9)
   ggsave(file.path(carpeta_img, "comparacion_directo_fay_herriot.png"), grafico_directo_fh,
          width = 14, height = 3.5, dpi = 150)
-  # Dato directo de la provincia contra el promedio Fay-Herriot (6.5)
+  # Dato directo de la provincia contra el promedio Fay-Herriot
   grafico_provincia_fh <- ggplot(comparacion_provincia, aes(directo_provincia_pct, promedio_fh_pct)) +
     geom_abline(linetype = 2, colour = "grey50") +
     geom_point(aes(colour = provincia), size = 1.8, alpha = 0.8) +
@@ -1052,13 +893,12 @@ if (isTRUE(exportar_tabla)) {
               nrow(validacion_fh), NA, NA, NA, NA, NA, NA)))
 }
 
-## 6.7 Tablas de consola para el informe ----
+## 6.7 Tablas de resultados ----
 
-# Salidas de consola con los cinco indicadores juntos. No cambian los modelos,
-# las estimaciones ni los archivos de la seccion 6.6.
-# Aporte de cada variable: parte de la diferencia entre areas que explica. Con
-# una variable es todo lo que explica el modelo. Con dos, es el promedio entre
-# lo que explica sola y lo que agrega cuando ya esta la otra:
+# Resultados de los cinco indicadores juntos.
+# Aporte de cada variable: parte de la diferencia entre areas que explica.
+# Con una variable es todo lo que explica el modelo.
+# Con dos, es el promedio entre lo que explica sola y lo que agrega cuando ya esta la otra:
 #   aporte_1 = (explica(1) + explica(1 y 2) - explica(2)) / 2
 # Los aportes suman lo que explica el modelo.
 nombre_corto <- c(inasistencia_12_17 = "Inasistencia", desempleo_general = "Desempleo",
@@ -1096,8 +936,8 @@ mostrar_etapa("6.7 Variables de cada modelo", aporte_variables %>% corto() %>%
             aporte_pct = numero(aporte_pct, 1), total_pct = numero(total_pct, 1),
             vif = if_else(is.na(vif), "-", numero(vif, 2))))
 
-# sigma_u = raiz de s2_v, la variacion entre areas que las variables no
-# explican. Se obtiene del peso: s2_v = g * V / (1 - g).
+# sigma_u = raiz de s2_v, la variacion entre areas que las variables no explican.
+# Se obtiene del peso: s2_v = g * V / (1 - g).
 atributos_fh <- estimaciones_fh %>%
   filter(tipo_estimacion == "fay_herriot") %>%
   group_by(indicador) %>%

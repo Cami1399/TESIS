@@ -3,11 +3,10 @@
 # Ambito: 86 cantones de las 7 provincias de la Costa, anios 2021-2025
 #
 # Cada variable se guarda como un objeto con las columnas:
-# anio, codigo_provincia, provincia, codigo_canton, canton,
-# numerador, denominador, valor
+# anio, codigo_provincia, provincia, codigo_canton, canton, numerador, denominador, valor
 #
 # Organizacion: una seccion principal por fuente de datos.
-# Niveles de titulo (ver con Ctrl + Shift + O en RStudio):
+#   Niveles de titulo (ver con Ctrl + Shift + O en RStudio):
 #   #   = titulo principal (seccion)
 #   ##  = subtitulo
 #   ### = sub-subtitulo
@@ -20,21 +19,19 @@
 library(tidyverse)   # dplyr, tidyr, stringr, purrr, readr
 library(readxl)      # lectura de archivos .xlsx
 library(haven)       # lectura de archivos .sav (SPSS)
-# data.table::fread se usa para leer los CSV del REESS (se llama con
-# data.table:: para no cargar el paquete y evitar choques con dplyr)
+# data.table::fread se usa para leer los CSV del REESS (se llama con data.table:: para no cargar el paquete y evitar choques con dplyr)
 
 
 ## 0.2 Parametros comunes ----
 
-# Provincias de la Costa (codigo DPA): El Oro, Esmeraldas, Guayas, Los Rios,
-# Manabi, Santo Domingo de los Tsachilas, Santa Elena
+# Provincias de la Costa (codigo DPA): El Oro, Esmeraldas, Guayas, Los Rios, Manabi, Santo Domingo de los Tsachilas, Santa Elena
 provincias_costa <- c("07", "08", "09", "12", "13", "23", "24")
 
 
 ## 0.3 Poblacion cantonal (INEC, proyecciones revision 2024) ----
 
-# Archivo generado por SCRIP_POBLACION_CANTONAL.R (hoja 3.1 del INEC,
-# cifras al 30 de junio). Una fila por canton y anio (86 x 5 = 430).
+# Archivo generado por SCRIP_POBLACION_CANTONAL.R (hoja 3.1 del INEC, cifras al 30 de junio).
+# Una fila por canton y anio (86 x 5 = 430).
 # Columnas que se usan como denominador:
 #   - POBLACION TOTAL    -> tasas de BDH (seccion 2)
 #   - POBLACION 15 Y MAS -> tasa de empleo formal (REESS)
@@ -62,27 +59,23 @@ stopifnot(nrow(poblacion_cantonal) == 430,
 
 # 1. MINEDEC - MINISTERIO DE EDUCACION ------------------------------------
 
-# Fuente: Descomposicion de la matricula, levantamiento de fin de periodo
-# (registros administrativos AMIE).
+# Fuente: Descomposicion de la matricula, levantamiento de fin de periodo (registros administrativos AMIE).
 # Variables: 1.2.1 Tasa de abandono escolar; 1.2.2 % de matricula particular.
 
 ## 1.1 Carga y lectura de archivos ----
 
 # Estructura de los archivos (revisada antes de programar):
-#   - Un archivo por periodo lectivo, hoja "Tabla n_01", una fila por
-#     institucion educativa (aprox. 16 000 filas a nivel nacional).
+#   - Un archivo por periodo lectivo, hoja "Tabla n_01", una fila por institucion educativa (aprox. 16 000 filas a nivel nacional).
 #   - 2020-2021 a 2023-2024: encabezado en la fila 17, 250 columnas.
 #     Estados por grado: Promovidos, NoPromovidos, Abandono, NoActualizados.
 #     Grados: OctavoAnoEGB ... DecimoAnoEGB, PrimerAnoBACH ... TercerAnoBACH.
 #   - 2024-2025: encabezado en la fila 16, 176 columnas.
 #     Estados: Promovido, NoPromovido, Abandono (ya no trae NoActualizados).
 #     Grados: 8voanoBasica ... 10moanoBasica, 1erAnoBachillerato ... 3er...
-#   - En 2023-2024 los ceros vienen como "-"; se leen como texto y se
-#     convierten a 0.
-#   - El orden de las columnas cambia entre anios, por eso se seleccionan
-#     por NOMBRE y no por posicion.
-#   - Asignacion de anio: el periodo se asigna al anio en que termina
-#     (2020-2021 -> 2021; ... ; 2024-2025 -> 2025). Seccion 1.1 del documento.
+#   - En 2023-2024 los ceros vienen como "-"; se leen como texto y se convierten a 0.
+#   - El orden de las columnas cambia entre anios, por eso se seleccionan por NOMBRE y no por posicion.
+#   - Asignacion de anio: el periodo se asigna al anio en que termina (2020-2021 -> 2021; ... ; 2024-2025 -> 2025).
+#     Seccion 1.1 del documento.
 #   - Grados: solo 8.o EGB a 3.o Bachillerato (edad oficial 12 a 17 anios).
 
 ### 1.1.1 Rutas y archivos ----
@@ -103,8 +96,7 @@ archivos_minedec <- tribble(
 
 # Pasos:
 #   1. Lee todo como texto (para manejar el "-").
-#   2. Quita tildes y espacios de los nombres de columna (Cod_Cantón ->
-#      Cod_Canton, "Tipo de Educación" -> Tipo de Educacion, etc.).
+#   2. Quita tildes y espacios de los nombres de columna (Cod_Cantón -> Cod_Canton, "Tipo de Educación" -> Tipo de Educacion, etc.).
 #   3. Deja solo las columnas de identificacion y las de estado por grado.
 #   4. Pasa a formato largo: una fila por institucion x grado x sexo x estado.
 leer_minedec <- function(archivo, anio, fila_encabezado) {
@@ -194,8 +186,7 @@ cantones_costa <- minedec_costa %>%
 
 ### 1.1.4 Control de lectura ----
 
-# Esperado: 48 columnas de estado hasta 2024 (6 grados x 2 sexos x 4 estados),
-# 36 en 2025 (6 grados x 2 sexos x 3 estados) y 86 cantones por anio.
+# Esperado: 48 columnas de estado hasta 2024 (6 grados x 2 sexos x 4 estados), 36 en 2025 (6 grados x 2 sexos x 3 estados) y 86 cantones por anio.
 control_lectura <- minedec_costa %>%
   summarise(
     columnas_estado = n_distinct(grado, estado) * 2,
@@ -218,19 +209,19 @@ print(nrow(cantones_costa))
 #         valor       = numerador / denominador * 100
 #         Se excluye "No actualizados" del denominador.
 #         Todos los sostenimientos y todos los tipos de educacion.
+#         Por que: quien abandona el grado sale del sistema educativo (Arias et al., 2022, p. 52), por lo que se relaciona con la inasistencia.
 #
 #   1.2.2 Porcentaje de matricula particular (%MP) - Creacion propia
 #         estudiantes = Promovidos + No promovidos + Abandono
 #         numerador   = estudiantes en Sostenimiento == "Particular"
-#         denominador = estudiantes en Fiscal + Fiscomisional + Municipal +
-#                       Particular
+#         denominador = estudiantes en Fiscal + Fiscomisional + Municipal + Particular
 #         valor       = numerador / denominador * 100
 #         Sin "No actualizados".
+#         Por que: se toma como aproximacion a la capacidad de pago de los hogares, por analogia con el porcentaje de afiliados al seguro privado de salud que usa Chile en su modelo de pobreza (MDSF, 2019, p. 12).
 
 ### 1.2.0 Base comun MinEdec ----
 
-# Suma por canton, anio y sostenimiento de cada estado
-# (8.o EGB a 3.o Bachillerato, ambos sexos, todos los tipos de educacion)
+# Suma por canton, anio y sostenimiento de cada estado (8.o EGB a 3.o Bachillerato, ambos sexos, todos los tipos de educacion)
 minedec_canton <- minedec_costa %>%
   summarise(
     estudiantes = sum(estudiantes, na.rm = TRUE),
@@ -287,30 +278,24 @@ summary(var_matricula_particular$valor)
 
 # 2. MIES - BONOS Y PENSIONES (MINISTERIO DE DESARROLLO HUMANO) -----------
 
-# Fuente: Bases de Aseguramiento No Contributivo, corte a diciembre de cada
-# anio (cierre anual), 2021-2025.
+# Fuente: Bases de Aseguramiento No Contributivo, corte a diciembre de cada anio (cierre anual), 2021-2025.
 # Variables: 2.2.1 Tasa de hogares con BDH (general);
 #            2.2.2 Tasa de hogares con BDH con componente variable.
 
 ## 2.1 Carga y lectura de archivos ----
 
 # Estructura de los archivos (revisada antes de programar):
-#   - Un archivo .sav (SPSS) por anio, una fila por beneficiario
-#     (aprox. 1,4 a 1,6 millones de filas a nivel nacional; 300-480 MB).
-#   - Mismas columnas los 5 anios. Se leen solo las necesarias
-#     (col_select) para no cargar todo el archivo en memoria:
+#   - Un archivo .sav (SPSS) por anio, una fila por beneficiario (aprox. 1,4 a 1,6 millones de filas a nivel nacional; 300-480 MB).
+#   - Mismas columnas los 5 anios.
+#     Se leen solo las necesarias (col_select) para no cargar todo el archivo en memoria:
 #       idcant17      = codigo de canton DPA, numerico (701 -> "0701")
 #       TIPOBENEFICIO = nombre del subsidio (texto)
 #   - TIPOBENEFICIO trae el mismo texto todos los anios:
 #       "BONO DE DESARROLLO HUMANO"
 #       "BONO DE DESARROLLO HUMANO CON COMPONENTE VARIABLE"
-#     Las demas categorias (pensiones, Joaquin Gallegos Lara, Bono 1000
-#     Dias) no se usan.
-#   - La provincia se toma de los dos primeros digitos del codigo de canton
-#     (en 2021 hay 2 registros del canton 0702 con provincia "GUAYAS").
-#   - Los nombres de canton cambian entre anios (p. ej. "YAGUACHI",
-#     "...(JUJAN)"); por eso se une por codigo y los nombres se toman del
-#     archivo de poblacion (seccion 0.3).
+#     Las demas categorias (pensiones, Joaquin Gallegos Lara, Bono 1000 Dias) no se usan.
+#   - La provincia se toma de los dos primeros digitos del codigo de canton (en 2021 hay 2 registros del canton 0702 con provincia "GUAYAS").
+#   - Los nombres de canton cambian entre anios (p. ej. "YAGUACHI", "...(JUJAN)"); por eso se une por codigo y los nombres se toman del archivo de poblacion (seccion 0.3).
 
 ### 2.1.1 Rutas y archivos ----
 
@@ -335,8 +320,7 @@ bdh_variable <- "BONO DE DESARROLLO HUMANO CON COMPONENTE VARIABLE"
 #   1. Lee solo idcant17 y TIPOBENEFICIO.
 #   2. Completa el codigo de canton a 4 digitos y obtiene la provincia.
 #   3. Filtra la Costa y las dos subcategorias del BDH.
-#   4. Cuenta beneficiarios por canton y subcategoria (una fila = un
-#      usuario habilitado, aprox. un hogar).
+#   4. Cuenta beneficiarios por canton y subcategoria (una fila = un usuario habilitado, aprox. un hogar).
 leer_mies <- function(archivo, anio) {
 
   read_sav(
@@ -388,20 +372,20 @@ stopifnot(all(mies_bdh$codigo_canton %in% poblacion_cantonal$codigo_canton))
 #         numerador   = beneficiarios BDH + BDH con componente variable
 #         denominador = poblacion total del canton (seccion 0.3)
 #         valor       = numerador / denominador * 100
-#         Adaptada de la cobertura relativa de la CEPAL (Cecchini y
-#         Atuesta, 2017, pp. 21 y 55).
+#         Adaptada de la cobertura relativa de la CEPAL (Cecchini y Atuesta, 2017, pp. 21 y 55).
+#         Por que: el bono se dirige a nucleos familiares en pobreza o extrema pobreza (INEC, 2026b, p. 131), por lo que se relaciona con la pobreza y con la inasistencia, ya que las mayores brechas para terminar la secundaria se dan entre niveles socioeconomicos (Trucco et al., 2026, p. 14).
 #
 #   2.2.2 Tasa de hogares con BDH con componente variable - Creacion propia
 #         numerador   = beneficiarios BDH con componente variable
 #         denominador = poblacion total del canton (seccion 0.3)
 #         valor       = numerador / denominador * 100
 #         No entra en el mismo modelo que 2.2.1 (esta contenida en ella).
+#         Por que: se dirige a nucleos familiares en extrema pobreza con hijos menores de 18 anios (INEC, 2026b, p. 132), por lo que se relaciona con los adolescentes en hogares con NBI.
 
 ### 2.2.0 Base comun MIES ----
 
-# Una fila por canton y anio (86 x 5) con los beneficiarios de cada
-# subcategoria y la poblacion total. Si un canton no tuviera
-# beneficiarios en un anio, queda en 0.
+# Una fila por canton y anio (86 x 5) con los beneficiarios de cada subcategoria y la poblacion total.
+# Si un canton no tuviera beneficiarios en un anio, queda en 0.
 mies_canton <- poblacion_cantonal %>%
   select(anio, codigo_provincia, provincia, codigo_canton, canton,
          poblacion_total) %>%
@@ -422,8 +406,7 @@ mies_canton <- poblacion_cantonal %>%
 
 ### 2.2.1 Tasa de hogares con BDH (general) ----
 
-# TBDH(c,a) = (Beneficiarios BDH + BDH con componente variable) /
-#             Poblacion total * 100
+# TBDH(c,a) = (Beneficiarios BDH + BDH con componente variable) / Poblacion total * 100
 
 var_bdh_general <- mies_canton %>%
   transmute(
@@ -439,8 +422,7 @@ summary(var_bdh_general$valor)
 
 ### 2.2.2 Tasa de hogares con BDH con componente variable ----
 
-# TBDHV(c,a) = Beneficiarios BDH con componente variable /
-#              Poblacion total * 100
+# TBDHV(c,a) = Beneficiarios BDH con componente variable / Poblacion total * 100
 
 var_bdh_variable <- mies_canton %>%
   transmute(
@@ -457,34 +439,26 @@ summary(var_bdh_variable$valor)
 
 # 3. REESS - EMPLEO EN LA SEGURIDAD SOCIAL (INEC) -------------------------
 
-# Fuente: Registro Estadistico de Empleo en la Seguridad Social (REESS),
-# microdatos mensuales 2021-2025 (definitivas hasta 2023, semidefinitivas
-# 2024 y enero 2025, provisionales febrero-diciembre 2025).
+# Fuente: Registro Estadistico de Empleo en la Seguridad Social (REESS), microdatos mensuales 2021-2025 (definitivas hasta 2023, semidefinitivas 2024 y enero 2025, provisionales febrero-diciembre 2025).
 # Variables: 3.2.1 Tasa de empleo formal;
 #            3.2.2 % de trabajadores que ganan el salario basico.
 
 ## 3.1 Carga y lectura de archivos ----
 
 # Estructura de los archivos (revisada antes de programar):
-#   - Un CSV por mes, "BDD_REESS_<anio>_<mes>.csv", repartidos en tres
-#     subcarpetas (definitivas, semidefinitivas, provisionales). Se buscan
-#     por nombre en toda la carpeta RESS.
-#   - Aprox. 3,6 a 3,9 millones de filas por mes a nivel nacional; mismo
-#     encabezado en los 60 meses. Se leen solo las columnas necesarias:
-#       empleo            = 1 en la afiliacion de mayor sueldo de cada
-#                           persona (cuenta una vez a cada persona); NA en
-#                           el resto
+#   - Un CSV por mes, "BDD_REESS_<anio>_<mes>.csv", repartidos en tres subcarpetas (definitivas, semidefinitivas, provisionales).
+#     Se buscan por nombre en toda la carpeta RESS.
+#   - Aprox. 3,6 a 3,9 millones de filas por mes a nivel nacional; mismo encabezado en los 60 meses.
+#     Se leen solo las columnas necesarias:
+#       empleo            = 1 en la afiliacion de mayor sueldo de cada persona (cuenta una vez a cada persona); NA en el resto
 #       sector_afiliacion = 1 Privado, 2 Publico (solo estos tienen canton)
-#       canton            = codigo DPA numerico (701 -> "0701"); es el
-#                           domicilio fiscal de la empresa
+#       canton            = codigo DPA numerico (701 -> "0701"); es el domicilio fiscal de la empresa
 #       sueldo, dias      = sueldo del mes y dias trabajados
 #       sbu               = salario basico unificado del anio
 #       s_atip            = 1 no atipico; NA atipico
-#   - Cada mes se resume por canton al leerlo, para no cargar en memoria
-#     los 60 meses completos.
-#   - Nota: en 2025 (datos provisionales) aparecen registros privados con
-#     canton "X99" (no identificado: 0799, 0999, ...), como maximo 512
-#     personas al mes (< 0,04 % del empleo de la Costa). Se excluyen.
+#   - Cada mes se resume por canton al leerlo, para no cargar en memoria los 60 meses completos.
+#   - Nota: en 2025 (datos provisionales) aparecen registros privados con canton "X99" (no identificado: 0799, 0999, ...), como maximo 512 personas al mes (< 0,04 % del empleo de la Costa).
+#     Se excluyen.
 
 ### 3.1.1 Rutas y archivos ----
 
@@ -514,10 +488,8 @@ stopifnot(nrow(archivos_reess) == 60,
 #   3. Completa el codigo de canton y deja la Costa.
 #   4. Resume por canton:
 #        empleo_registrado = personas (base de la 3.2.1)
-#        trabajadores      = personas con s_atip == 1 y dias > 0
-#                            (denominador de la 3.2.2)
-#        trabajadores_sbu  = de ellas, sueldo / dias * 30 <= sbu
-#                            (numerador de la 3.2.2)
+#        trabajadores      = personas con s_atip == 1 y dias > 0 (denominador de la 3.2.2)
+#        trabajadores_sbu  = de ellas, sueldo / dias * 30 <= sbu (numerador de la 3.2.2)
 leer_reess <- function(ruta, anio, mes) {
 
   data.table::fread(
@@ -584,14 +556,14 @@ stopifnot(all(control_lectura_reess$cantones == 86))
 #         numerador   = promedio de los 12 meses de E(c,m)
 #         denominador = poblacion de 15 anios y mas (seccion 0.3)
 #         valor       = numerador / denominador * 100
+#         Por que: el empleo registrado se parece al empleo del sector formal (INEC, 2023, p. 28), por lo que con mas empleo formal se espera menos desempleo.
 #
-#   3.2.2 % de trabajadores que ganan el salario basico (PSBU) - Creacion
-#         propia
+#   3.2.2 % de trabajadores que ganan el salario basico (PSBU) - Creacion propia
 #         filtros     = empleo == 1, sectores 1 y 2, s_atip == 1, dias > 0
-#         numerador   = suma de los 12 meses de trabajadores con
-#                       sueldo / dias * 30 <= SBU
+#         numerador   = suma de los 12 meses de trabajadores con sueldo / dias * 30 <= SBU
 #         denominador = suma de los 12 meses de trabajadores
 #         valor       = numerador / denominador * 100
+#         Por que: Chile usa en su modelo de pobreza el porcentaje de afiliados con remuneracion inferior al salario minimo (MDSF, 2019, p. 12), por lo que se relaciona con la pobreza.
 
 ### 3.2.0 Base comun REESS ----
 
@@ -627,8 +599,7 @@ summary(var_empleo_formal$valor)
 
 ### 3.2.2 Porcentaje de trabajadores que ganan el salario basico ----
 
-# PSBU(c,a) = sum_m trabajadores con (sueldo / dias * 30) <= SBU /
-#             sum_m trabajadores * 100
+# PSBU(c,a) = sum_m trabajadores con (sueldo / dias * 30) <= SBU / sum_m trabajadores * 100
 
 var_salario_basico <- poblacion_cantonal %>%
   left_join(reess_canton, by = c("anio", "codigo_canton")) %>%
@@ -646,30 +617,22 @@ summary(var_salario_basico$valor)
 
 # 4. NACIDOS VIVOS (INEC) -------------------------------------------------
 
-# Fuente: Registro Estadistico de Nacidos Vivos (ENV), INEC, 2021-2025
-# (2025 provisional).
+# Fuente: Registro Estadistico de Nacidos Vivos (ENV), INEC, 2021-2025 (2025 provisional).
 # Variable: 4.2.1 % de nacidos vivos de madres sin pareja.
 
 ## 4.1 Carga y lectura de archivos ----
 
 # Estructura de los archivos (revisada antes de programar):
 #   - Un CSV por anio (separador ";", UTF-8), una fila por nacido vivo.
-#     Los nombres de archivo y carpeta cambian entre anios (ENV_2021.csv,
-#     BDD_ENV_2023.csv, ...); se buscan por nombre en toda la carpeta.
+#     Los nombres de archivo y carpeta cambian entre anios (ENV_2021.csv, BDD_ENV_2023.csv, ...); se buscan por nombre en toda la carpeta.
 #     Los archivos EDF (defunciones fetales) no se usan.
-#   - El orden de las columnas cambia entre anios y 2025 tiene menos
-#     columnas; las que se usan estan en todos y se leen por nombre:
+#   - El orden de las columnas cambia entre anios y 2025 tiene menos columnas; las que se usan estan en todos y se leen por nombre:
 #       anio_nac           = anio de nacimiento
 #       est_civil          = estado civil o conyugal de la madre (texto)
-#       prov_res, cant_res = provincia y canton de residencia habitual de
-#                            la madre (NOMBRES, no codigos)
-#   - Cada base trae nacimientos de anios anteriores inscritos tarde; se
-#     deja solo anio_nac = anio de la base (2025: 208 985, igual al
-#     tabulado oficial 3.1.24).
-#   - El canton se asigna por emparejamiento de texto (provincia + canton)
-#     con el catalogo de la seccion 0.3, despues de quitar tildes, pasar a
-#     mayusculas y quitar espacios dobles. Dos cantones se escriben
-#     distinto y van en una tabla de equivalencias.
+#       prov_res, cant_res = provincia y canton de residencia habitual de la madre (NOMBRES, no codigos)
+#   - Cada base trae nacimientos de anios anteriores inscritos tarde; se deja solo anio_nac = anio de la base (2025: 208 985, igual al tabulado oficial 3.1.24).
+#   - El canton se asigna por emparejamiento de texto (provincia + canton) con el catalogo de la seccion 0.3, despues de quitar tildes, pasar a mayusculas y quitar espacios dobles.
+#     Dos cantones se escriben distinto y van en una tabla de equivalencias.
 
 ### 4.1.1 Rutas y archivos ----
 
@@ -768,28 +731,21 @@ print(control_lectura_nacidos)
 
 # Armado de la variable:
 #
-#   4.2.1 % de nacidos vivos de madres sin pareja (NVSP) - Conteos
-#         oficiales, porcentaje y agrupacion propios
+#   4.2.1 % de nacidos vivos de madres sin pareja (NVSP) - Conteos oficiales, porcentaje y agrupacion propios
 #         sin pareja  = Soltera + Divorciada + Separada + Viuda
 #         con pareja  = Casada + Unida + Union de hecho
 #         numerador   = nacidos de madres sin pareja
 #         denominador = total de nacidos, sin "Sin informacion"
 #         valor       = numerador / denominador * 100
 #         Canton de residencia habitual de la madre.
-#         Verificacion: en 2025 numerador y denominador son identicos al
-#         tabulado oficial 3.1.24 del INEC en los 86 cantones.
-#         Limitacion: est_civil mezcla estado civil legal y situacion
-#         conyugal; a nivel nacional "Soltera" sube de 23 % (2014) a 63 %
-#         (2025) y "Unida" baja (serie 1.3.10), lo que infla el nivel de la
-#         variable. Control interno con el Censo 2022: correlacion de 0,35
-#         con % de hogares pobres por NBI, y el cambio de registro no se
-#         relaciona con la pobreza (-0,04). Los efectos de anio del modelo
-#         absorben la tendencia comun.
+#         Por que: recoge el estado civil o conyugal de la madre (INEC, 2025b), por lo que se relaciona con los hogares con un solo jefe e hijos menores.
+#         Verificacion: en 2025 numerador y denominador son identicos al tabulado oficial 3.1.24 del INEC en los 86 cantones.
+#         Limitacion: est_civil mezcla estado civil legal y situacion conyugal; a nivel nacional "Soltera" sube de 23 % (2014) a 63 % (2025) y "Unida" baja (serie 1.3.10), lo que infla el nivel de la variable.
+#           Control interno con el Censo 2022: correlacion de 0,35 con % de hogares pobres por NBI, y el cambio de registro no se relaciona con la pobreza (-0,04).
 
 ### 4.2.1 Porcentaje de nacidos vivos de madres sin pareja ----
 
-# NVSP(c,a) = Nacidos de madres solteras, divorciadas, separadas o viudas /
-#             Total de nacidos vivos (sin "Sin informacion") * 100
+# NVSP(c,a) = Nacidos de madres solteras, divorciadas, separadas o viudas / Total de nacidos vivos (sin "Sin informacion") * 100
 
 estado_sin_pareja <- c("SOLTERA", "DIVORCIADA", "SEPARADA", "VIUDA")
 estado_con_pareja <- c("CASADA", "UNIDA", "UNION DE HECHO")
@@ -821,22 +777,17 @@ summary(var_nacidos_sin_pareja$valor)
 
 # 5. POBLACION URBANA (INEC, PROYECCIONES REVISION 2024) -------------------
 
-# Fuente: Estimaciones y proyecciones de poblacion, revision 2024 (INEC),
-# hoja 3.5 "Grupos quinquenales por area geografica y sexo", nivel cantonal,
-# cifras al 30 de junio. Mismo archivo que la seccion 0.3 (hoja 3.1).
+# Fuente: Estimaciones y proyecciones de poblacion, revision 2024 (INEC), hoja 3.5 "Grupos quinquenales por area geografica y sexo", nivel cantonal, cifras al 30 de junio.
+#   Mismo archivo que la seccion 0.3 (hoja 3.1).
 # Variable: 5.2.1 % de poblacion urbana.
 # Indicadores: desempleo y % de hogares monoparentales con menores.
 
 ## 5.1 Carga y lectura ----
 
 # Estructura de la hoja 3.5 (revisada antes de programar):
-#   - Fila de encabezado con "Codigo Provincia", "Codigo Canton" y
-#     "Edad - Grupos Quinquenales"; debajo, una fila con los anios (celdas
-#     combinadas), otra con el area (Urbano / Rural) y otra con el sexo
-#     (Hombre / Mujer / Total).
-#   - Una fila por canton y grupo de edad (0-4 ... 100 y mas). Se usa solo
-#     la columna Total de cada area y anio; no se suman hombres, mujeres y
-#     Total juntos.
+#   - Fila de encabezado con "Codigo Provincia", "Codigo Canton" y "Edad - Grupos Quinquenales"; debajo, una fila con los anios (celdas combinadas), otra con el area (Urbano / Rural) y otra con el sexo (Hombre / Mujer / Total).
+#   - Una fila por canton y grupo de edad (0-4 ... 100 y mas).
+#     Se usa solo la columna Total de cada area y anio; no se suman hombres, mujeres y Total juntos.
 
 ### 5.1.1 Ruta ----
 
@@ -914,10 +865,7 @@ stopifnot(nrow(control_area) == 430, all(control_area$diferencia == 0))
 #         numerador   = poblacion del area urbana del canton
 #         denominador = poblacion urbana + rural (= poblacion total)
 #         valor       = numerador / denominador * 100
-#         Sustento (ficha 3.8 del documento): en Ecuador el desempleo es
-#         mayor en el area urbana que en la rural (INEC, 2026f); los cambios
-#         familiares que aumentan los hogares monoparentales se asocian con
-#         la urbanizacion (Ullmann, Maldonado y Rico, 2014, pp. 26 y 30).
+#         Por que: en Ecuador el desempleo es mayor en el area urbana (3,2 %) que en la rural (1,5 %) (INEC, 2026f, diciembre de 2025); los cambios familiares que aumentan los hogares monoparentales se asocian con la urbanizacion (Ullmann, Maldonado y Rico, 2014, pp. 26 y 30).
 
 ### 5.2.1 Porcentaje de poblacion urbana ----
 
@@ -947,12 +895,8 @@ summary(var_poblacion_urbana$valor)
 
 # 6. EXPORTACION ----------------------------------------------------------
 
-# Panel largo: una fila por canton x anio x variable auxiliar
-# (86 cantones x 5 anios x 8 variables = 3 440 filas).
-# Columnas: anio, codigo_provincia, provincia, codigo_canton, canton,
-#           variable, valor
-# Los nombres de provincia y canton se toman del archivo de poblacion
-# (seccion 0.3) para que sean iguales en todas las variables.
+# Panel largo: una fila por canton x anio x variable auxiliar (86 cantones x 5 anios x 8 variables = 3 440 filas).
+# Columnas: anio, codigo_provincia, provincia, codigo_canton, canton, variable, valor Los nombres de provincia y canton se toman del archivo de poblacion (seccion 0.3) para que sean iguales en todas las variables.
 
 ## 6.1 Union de las variables en un panel largo ----
 
@@ -1013,11 +957,9 @@ writexl::write_xlsx(
 ## 7.1 Distribucion de las variables auxiliares ----
 
 # Graficos en escala original (porcentaje):
-#   7.1.1 Caja por anio, uno por variable: un punto = un canton en ese anio
-#         (86 por caja); el color indica la provincia.
+#   7.1.1 Caja por anio, uno por variable: un punto = un canton en ese anio (86 por caja); el color indica la provincia.
 #   7.1.2 Panel con las 8 cajas de la 7.1.1 juntas.
-#   7.1.3 Grilla de distribucion: filas = provincias, columnas = variables;
-#         en cada recuadro, la curva de los 5 anios juntos de esa provincia.
+#   7.1.3 Grilla de distribucion: filas = provincias, columnas = variables; en cada recuadro, la curva de los 5 anios juntos de esa provincia.
 # El panel no tiene NA (seccion 6.2).
 
 variables_auxiliares <- c("abandono_escolar", "matricula_particular",
@@ -1031,10 +973,8 @@ datos_distribucion <- panel_variables_auxiliares %>%
 
 ### 7.1.1 Caja por anio (un punto por canton) ----
 
-# Los puntos se separan un poco en horizontal para que no se tapen; la
-# semilla fija esa separacion para que el grafico salga igual cada vez.
-# outlier.shape = NA evita dibujar dos veces los atipicos: ya estan como
-# puntos de canton (son los que quedan fuera de los bigotes).
+# Los puntos se separan un poco en horizontal para que no se tapen; la semilla fija esa separacion para que el grafico salga igual cada vez.
+# outlier.shape = NA evita dibujar dos veces los atipicos: ya estan como puntos de canton (son los que quedan fuera de los bigotes).
 graficar_caja_anio <- function(var) {
   datos_distribucion %>%
     filter(variable == var) %>%
@@ -1057,8 +997,8 @@ walk(graficos_caja_anio, print)
 
 ### 7.1.2 Panel de cajas: las 8 variables juntas ----
 
-# Mismo grafico de la 7.1.1, con un recuadro por variable. Cada recuadro
-# tiene su propia escala vertical porque los rangos son muy distintos.
+# Mismo grafico de la 7.1.1, con un recuadro por variable.
+# Cada recuadro tiene su propia escala vertical porque los rangos son muy distintos.
 grafico_panel_cajas <- datos_distribucion %>%
   mutate(variable = factor(variable, levels = variables_auxiliares,
                            labels = c("Abandono escolar", "Matrícula particular", "BDH general",
@@ -1081,15 +1021,11 @@ print(grafico_panel_cajas)
 
 ### 7.1.3 Grilla de distribucion: provincias x variables ----
 
-# Cada recuadro es una provincia (fila) en una variable (columna); la curva
-# junta los 5 anios de los cantones de esa provincia. Las rayitas de abajo
-# son los canton-anio.
-# - Eje X: cada columna tiene su propia escala; dentro de una columna todas
-#   las provincias comparten la escala y se pueden comparar.
-# - Altura: cada curva se ajusta para llenar su recuadro (after_stat(scaled)),
-#   asi que se compara la forma, no la altura entre recuadros.
-# - Santo Domingo (2 cantones) y Santa Elena (3) tienen 10 y 15 valores; su
-#   curva se lee con cuidado.
+# Cada recuadro es una provincia (fila) en una variable (columna); la curva junta los 5 anios de los cantones de esa provincia.
+# Las rayitas de abajo son los canton-anio.
+# - Eje X: cada columna tiene su propia escala; dentro de una columna todas las provincias comparten la escala y se pueden comparar.
+# - Altura: cada curva se ajusta para llenar su recuadro (after_stat(scaled)), asi que se compara la forma, no la altura entre recuadros.
+# - Santo Domingo (2 cantones) y Santa Elena (3) tienen 10 y 15 valores; su curva se lee con cuidado.
 grafico_grilla_distribucion <- datos_distribucion %>%
   mutate(
     variable  = factor(variable, levels = variables_auxiliares,
@@ -1114,8 +1050,7 @@ print(grafico_grilla_distribucion)
 
 # GUARDAR IMAGENES EN LA CARPETA DE SCRIPTS ------------------------------------
 
-# Las imagenes de este script van a
-# SCRIPTS/SALIDAS_EXPLORACIONES/salidas_variables_auxiliares.
+# Las imagenes de este script van a SCRIPTS/SALIDAS_EXPLORACIONES/salidas_variables_auxiliares.
 if (!exists("carpeta_imagenes")) carpeta_imagenes <- "C:/Users/camil/OneDrive/Desktop/TESIS/SCRIPTS/SALIDAS_EXPLORACIONES"
 carpeta_img <- file.path(carpeta_imagenes, "salidas_variables_auxiliares")
 dir.create(carpeta_img, recursive = TRUE, showWarnings = FALSE)

@@ -26,9 +26,8 @@ anios_interes <- 2021:2025
 edades_interes <- 12:17          # población adolescente
 edad_minima_trabajo <- 15        # población en edad de trabajar: 15 años y más
 edades_todas <- 0:100            # 0 a "100 y más" (100 = 100 y más)
-# Clasificación Costa: El Oro, Esmeraldas, Guayas, Los Ríos, Manabí,
-# Santo Domingo de los Tsáchilas y Santa Elena. Se usan los códigos de la
-# fuente, conservando su división territorial, sin imponer el catálogo 2026.
+# Clasificación Costa: El Oro, Esmeraldas, Guayas, Los Ríos, Manabí, Santo Domingo de los Tsáchilas y Santa Elena.
+# Se usan los códigos de la fuente, conservando su división territorial, sin imponer el catálogo 2026.
 codigos_costa <- c("07", "08", "09", "12", "13", "23", "24")
 
 if (!file.exists(ruta_origen)) stop("No existe el archivo: ", ruta_origen)
@@ -73,10 +72,8 @@ col_anios <- vapply(anios_interes, function(a) {
   p
 }, integer(1))
 
-# Se leen todas las edades simples (0 a "100 y más"); la fila "Total" de cada
-# cantón no entra en el detalle y se usa solo como control.
-# No sumar hombres, mujeres y Total juntos: únicamente se extrae la columna
-# Total de cada año.
+# Se leen todas las edades simples (0 a "100 y más"); la fila "Total" de cada cantón no entra en el detalle y se usa solo como control.
+# No sumar hombres, mujeres y Total juntos: únicamente se extrae la columna Total de cada año.
 edad <- suppressWarnings(as.integer(m[, ce]))
 edad[!is.na(m[, ce]) & grepl("^100", m[, ce])] <- 100L   # "100 y más" -> 100
 filas <- which(seq_len(nrow(m)) > fs & m[, cp] %in% codigos_costa & edad %in% edades_todas)
@@ -134,9 +131,8 @@ if (nrow(diferencias)) {
   stop("La suma de edades no coincide con la fila Total de la fuente")
 }
 
-# Un solo archivo de salida: población de 12 a 17, de 15 años y más y total,
-# por cantón y año. Se conservan el nombre del archivo, la hoja
-# "Total_adolescente" y la columna "POBLACION 12-17", porque INDICADORES.R y
+# Un solo archivo de salida: población de 12 a 17, de 15 años y más y total, por cantón y año.
+# Se conservan el nombre del archivo, la hoja "Total_adolescente" y la columna "POBLACION 12-17", porque INDICADORES.R y
 # SCRIP_DATA_MAESTRA.R lo leen así (las columnas nuevas no les afectan).
 totales_export <- dplyr::rename(
   dplyr::select(totales, ANIO, COD_PROVINCIA, PROVINCIA, COD_CANTON, CANTON,

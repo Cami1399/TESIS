@@ -33,8 +33,8 @@ sum(duplicated(Data_2021_2025))
 
 ##  1.4 Filtro 2: solo edad 12-17 -----
 # 'edad' viene como texto -> se convierte a numerico en la misma columna.
-# OJO: si algun valor no es numerico (ej. "SE DESCONOCE") queda NA y el filtro
-# lo excluye. Conviene revisar cuantas filas se pierden por este motivo.
+# OJO: si algun valor no es numerico (ej. "SE DESCONOCE") queda NA y el filtro lo excluye.
+# Conviene revisar cuantas filas se pierden por este motivo.
 Data_2021_2025 <- Data_2021_2025 %>%
   mutate(edad = as.numeric(edad))
 
@@ -254,8 +254,8 @@ dev.off()
 ##  2.6 Diagnostico inicial -----
 dim(Data_Adolescentes_2021_2025_COSTA)
 
-# NA reales por columna. Ojo: los faltantes tambien pueden venir como texto
-# (SIN_DATO, SE_DESCONOCE, etc.); esos se tratan en 4.2.
+# NA reales por columna.
+# Ojo: los faltantes tambien pueden venir como texto (SIN_DATO, SE_DESCONOCE, etc.); esos se tratan en 4.2.
 colSums(is.na(Data_Adolescentes_2021_2025_COSTA))
 
 # Filas repetidas (identicas en todas las columnas)
@@ -563,8 +563,7 @@ stopifnot(
 
 ## 4.4 Filas repetidas -----
 # No hay columna ID: repetida = fila identica en TODAS las columnas.
-# Se cuentan las copias extra, se guardan las filas repetidas para revision
-# y se eliminan las copias extra, conservando una fila de cada combinacion.
+# Se cuentan las copias extra, se guardan las filas repetidas para revision y se eliminan las copias extra, conservando una fila de cada combinacion.
 
 cat("Filas antes:", nrow(data_limpia), "\n")
 cat("Copias extra:", nrow(data_limpia) - nrow(distinct(data_limpia)), "\n")
@@ -581,8 +580,7 @@ data_limpia <- data_limpia %>% distinct()
 cat("Filas después:", nrow(data_limpia), "\n")
 
 ## 4.5 Verificacion de la limpieza -----
-# Las categorias unicas se pueden volver a exportar con el bucle sink() de 2.4,
-# apuntando a 'data_limpia' en lugar de Data_Adolescentes_2021_2025_COSTA.
+# Las categorias unicas se pueden volver a exportar con el bucle sink() de 2.4, apuntando a 'data_limpia' en lugar de Data_Adolescentes_2021_2025_COSTA.
 
 anyDuplicated(data_limpia)  # Debe dar 0: ya no hay filas identicas repetidas.
 sapply(select(data_limpia, where(is.character)), n_distinct)
@@ -619,8 +617,7 @@ fac_niveles_instruccion <- c("EDUCACIÓN INICIAL",
                              "CUARTO NIVEL O DE POSGRADO")
 
 # 3. Control: categorias que no estan en los niveles
-# Estas categorias quedaran como NA en el factor ordenado,
-# pero se conservaran en nivel_de_instruccion_txt.
+# Estas categorias quedaran como NA en el factor ordenado, pero se conservaran en nivel_de_instruccion_txt.
 
 setdiff(unique(data_limpia$nivel_de_instruccion), fac_niveles_instruccion)
 
@@ -655,8 +652,7 @@ table(data_limpia$nivel_de_instruccion_txt, useNA = "ifany")
 # SECCION 5: VERIFICACION FINAL DE TIPOS -----
 # ============================================================ #
 # Resume los tipos finales de 'data_limpia'.
-# Si las coordenadas originalmente son texto, no apareceran en
-# select(where(is.numeric)), pero seguiran presentes en data_limpia.
+# Si las coordenadas originalmente son texto, no apareceran en select(where(is.numeric)), pero seguiran presentes en data_limpia.
 
 ## 5.1 Variables numericas -----
 

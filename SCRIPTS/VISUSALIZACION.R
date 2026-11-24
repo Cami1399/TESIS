@@ -12,8 +12,7 @@ library(readxl)      # lectura del Excel (no viene dentro de tidyverse)
 carpeta_excel <- "C:/Users/camil/OneDrive/Desktop/TESIS/DATAS_PROCESADAS"
 ruta_excel    <- file.path(carpeta_excel, "comparacion_original_gvf_fay_herriot.xlsx")
 
-# Los graficos y las tablas como imagen van a
-# SCRIPTS/SALIDAS_EXPLORACIONES/salidas_visualizacion.
+# Los graficos y las tablas como imagen van a SCRIPTS/SALIDAS_EXPLORACIONES/salidas_visualizacion.
 if (!exists("carpeta_imagenes")) carpeta_imagenes <- "C:/Users/camil/OneDrive/Desktop/TESIS/SCRIPTS/SALIDAS_EXPLORACIONES"
 carpeta_graficos <- file.path(carpeta_imagenes, "salidas_visualizacion")
 carpeta_tablas   <- carpeta_graficos
@@ -33,8 +32,8 @@ guardar_png <- function(g, nombre, ancho, alto, dpi = 130, carpeta = carpeta_gra
 # 2. LECTURA Y PREPARACION DE LOS DATOS -----
 ## 2.1 Lectura del Excel ----
 stopifnot(file.exists(ruta_excel))
-# Archivo de SCRIP_ESTIMACION_AREAS_PEQUENAS.R. Sus columnas se renombran a
-# los nombres que usa este script (suavizado = Fay-Herriot).
+# Archivo de SCRIP_ESTIMACION_AREAS_PEQUENAS.R.
+# Sus columnas se renombran a los nombres que usa este script (suavizado = Fay-Herriot).
 est <- read_excel(ruta_excel, sheet = "Comparacion") %>%
   rename(valor_suavizado_pct = valor_fh_pct,
          error_suavizado_pp  = error_fh_pp,
@@ -106,8 +105,7 @@ print(lista_muestra_baja, n = Inf, width = Inf)
 
 
 ## Objeto 2: errores y CV en cada etapa (original, GVF, suavizado) ----
-# Error estandar y CV: original (antes), con GVF (varianza suavizada) y
-# suavizado final (despues de la estimacion en areas pequenas).
+# Error estandar y CV: original (antes), con GVF (varianza suavizada) y suavizado final (despues de la estimacion en areas pequenas).
 # El modelo usa la varianza suavizada (GVF) en todos los canton-anio.
 errores_muestra_baja <- base_muestra_baja %>%
   transmute(Indicador = etiqueta,
@@ -148,10 +146,8 @@ print(estimaciones_muestra_baja, n = Inf, width = Inf)
 #   PANEL   : un cuadro por anio (2021 a 2025), en una fila horizontal.
 # Tipos de CV:
 #   CV original  = error estandar directo / valor original * 100
-#   CV con GVF   = error estandar con varianza suavizada por GVF / valor original * 100
-#                  (antes de la estimacion en areas pequenas)
-#   CV suavizado = error estandar final (Fay-Herriot) / valor suavizado * 100
-#                  (despues de la estimacion en areas pequenas)
+#   CV con GVF   = error estandar con varianza suavizada por GVF / valor original * 100 (antes de la estimacion en areas pequenas)
+#   CV suavizado = error estandar final (Fay-Herriot) / valor suavizado * 100 (despues de la estimacion en areas pequenas)
 # Misma escala vertical en las 6 imagenes.
 
 ## Anios, etiquetas y paleta ----
@@ -320,8 +316,8 @@ ranking_saltos <- base_saltos %>%
   arrange(desc(`Suma de saltos máximos original (pp)`))
 print(ranking_saltos, n = 15, width = Inf)
 
-# 2) Canton elegido: el primero del ranking. Para fijar otro, escribe su
-#    nombre y su provincia en lugar de la seleccion automatica.
+# 2) Canton elegido: el primero del ranking.
+# Para fijar otro, escribe su nombre y su provincia en lugar de la seleccion automatica.
 canton_saltos    <- ranking_saltos$canton[1]
 provincia_saltos <- ranking_saltos$provincia[1]
 print(paste("Ejemplo 1:", canton_saltos, "-", provincia_saltos))
@@ -753,11 +749,8 @@ guardar_png(g_figB_original, "figB_cv_densidad_original.png", 12, 7.2, dpi = 200
 # CV MAYOR A 30 %: ORIGINAL, GVF Y FAY-HERRIOT ----------------------------------
 
 # CV = error / valor * 100. Solo se calcula si el valor es mayor que 0.
-# Un CV original bajo no siempre es precision: con pocas zonas encuestadas el
-# error sale muy bajo o 0. Por eso el original se separa con los criterios del
-# INEC (2025, pp. 22-23), muestra >= 60 y grados de libertad >= 9, mas error
-# mayor que 0 (un error de 0 indica falta de variacion en la muestra; Corral
-# et al., 2022, p. 19, advierte que ocurre con poca muestra).
+# Un CV original bajo no siempre es precision: con pocas zonas encuestadas el error sale muy bajo o 0.
+# Por eso el original se separa con los criterios del INEC (2025, pp. 22-23), muestra >= 60 y grados de libertad >= 9, mas error mayor que 0 (un error de 0 indica falta de variacion en la muestra; Corral et al., 2022, p. 19, advierte que ocurre con poca muestra).
 cv30 <- read_excel(ruta_excel, sheet = "Comparacion", guess_max = 5000) %>%
   mutate(
     Indicador = unname(c(
@@ -850,9 +843,9 @@ cv30_incumple <- cv30_motivo %>%
             .groups = "drop")
 
 # Tabla 8. Aporte del modelo segun el tamano de muestra
-# Error mediano que entra al modelo (GVF) y error mediano final, peso mediano de
-# la encuesta y casos con CV mayor a 30 %. Sin muestra solo hay Fay-Herriot. El
-# CV original y el de la GVF solo se cuentan con dato directo mayor que 0.
+# Error mediano que entra al modelo (GVF) y error mediano final, peso mediano de la encuesta y casos con CV mayor a 30 %.
+# Sin muestra solo hay Fay-Herriot.
+# El CV original y el de la GVF solo se cuentan con dato directo mayor que 0.
 cv30_tramo <- cv30 %>%
   mutate(n_registros = coalesce(muestra_denominador, 0),
          Tramo = cut(n_registros, c(-1, 0, 59, 150, 300, 1000, Inf),
@@ -872,8 +865,8 @@ resumir_aporte <- function(d) {
 cv30_aporte <- cv30_tramo %>% group_by(Tramo) %>% resumir_aporte()
 cv30_aporte_indicador <- cv30_tramo %>% group_by(Indicador, Tramo) %>% resumir_aporte()
 
-# Dibuja una tabla como imagen: se ve en Plots y se guarda como PNG. La letra
-# "serif" es Times New Roman en Windows.
+# Dibuja una tabla como imagen: se ve en Plots y se guarda como PNG.
+# La letra "serif" es Times New Roman en Windows.
 #   d = tabla, titulo y nota = textos, nombre = archivo, ancho = pulgadas
 tabla_imagen <- function(d, titulo, nombre, ancho, nota = NULL) {
   d <- as.data.frame(d)
@@ -970,9 +963,8 @@ tabla_imagen(
   "Aporte del modelo según el tamaño de muestra, por indicador", "tabla_8_aporte_muestra_indicador.png", 12.5,
   "Errores y peso: medianas.")
 # Tabla 9. Casos de la encuesta evaluados por indicador y anio
-# Registros del denominador de cada indicador en los cantones de la Costa, sin
-# factores de expansion. No se suman entre anios (la ENEMDU repite hogares) ni
-# entre indicadores (son las mismas personas).
+# Registros del denominador de cada indicador en los cantones de la Costa, sin factores de expansion.
+# No se suman entre anios (la ENEMDU repite hogares) ni entre indicadores (son las mismas personas).
 unidad_indicador <- c(
   "Pobreza" = "Personas con dato de pobreza",
   "NBI adolescente" = "Personas (población total)",
