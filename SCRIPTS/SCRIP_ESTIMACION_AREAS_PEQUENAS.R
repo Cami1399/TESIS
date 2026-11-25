@@ -228,7 +228,6 @@ mostrar_etapa("2. Varianza suavizada con efecto de diseno (GVF), por indicador",
 #   - Escala: el indicador entra como proporcion (0-1), sin transformar, y se multiplica por 100 al exportar.
 #     Las auxiliares entran en su escala original, sin transformar (MDSF-CEPAL, 2021, p. 50, nota 23).
 #   - Variables de cada indicador: relacion teorica con el indicador y seleccion por su significancia.
-#   - Intervalo de confianza al 95 %: estimacion +/- 1,96 * raiz(ECM), por aproximacion normal.
 
 ## 3.2 Validacion ----
 
@@ -376,18 +375,8 @@ ajustar_fay_herriot <- function(indicador_fh, variables, signo_esperado) {
     transmute(indicador, residuo_estandarizado = residuo, across(all_of(variables))) %>%
     pivot_longer(all_of(variables), names_to = "variable", values_to = "valor_variable")
 
-  grafico_qq <-tibble(componente = rep(c("Residuos estandarizados", "Efectos de area"), each = nrow(d)),
-                       valor = c(residuo, efecto)) %>%
-    ggplot(aes(sample = valor)) +
-    stat_qq(colour = "steelblue4", size = 0.8) +
-    stat_qq_line() +
-    facet_wrap(~ componente, scales = "free_y") +
-    labs(title = paste("Normalidad, Fay-Herriot:", indicador_fh),
-         x = "Cuantiles teoricos (normal)", y = "Cuantiles observados") +
-    theme_minimal(base_size = 10)
-
   list(estimaciones = estimaciones, coeficientes = coeficientes, validacion = validacion,
-       diagnosticos = diagnosticos, linealidad = linealidad, grafico_qq = grafico_qq)
+       diagnosticos = diagnosticos, linealidad = linealidad)
 }
 
 # Imprime en consola los resultados de un indicador.
@@ -400,7 +389,6 @@ mostrar_resultados <- function(ajuste, titulo) {
                   pivot_longer(-c(indicador, variables, metodo), names_to = "revision",
                                values_to = "valor", values_transform = as.character) %>%
                   select(revision, valor))
-  print(ajuste$grafico_qq)
   invisible(NULL)
 }
 
@@ -678,6 +666,7 @@ estimadores_fh <- estimadores %>%
   left_join(estimaciones_fh, by = c("anio", "codigo_canton", "indicador")) %>%
   transmute(anio, codigo_provincia, provincia, codigo_canton, canton, indicador,
             valor_pct = valor_fh_pct,
+            ecm_pp2 = error_fh_pp^2,
             error_estandar_pp = error_fh_pp,
             limite_inferior_pct = limite_inferior_fh_pct,
             limite_superior_pct = limite_superior_fh_pct,
@@ -724,7 +713,9 @@ comparacion <- estimadores %>%
             error_modelo_pp,
             # Fay-Herriot
             valor_sintetico_pct, peso_dato_original,
-            valor_fh_pct, error_fh_pp,
+            valor_fh_pct,
+            ecm_fh_pp2 = error_fh_pp^2,
+            error_fh_pp,
             cv_fh_pct = if_else(valor_fh_pct > 0, 100 * error_fh_pp / valor_fh_pct, NA_real_),
             limite_inferior_fh_pct, limite_superior_fh_pct,
             # Comparacion
@@ -787,7 +778,6 @@ mostrar_etapa("6.5 Comparacion con la provincia (R cerca de 1)",
 #   comparacion_original_gvf_fay_herriot.xlsx  original, GVF y Fay-Herriot (largo)
 #   validacion_fay_herriot.xlsx                resumen, coeficientes, GVF, diagnosticos por area y comparacion con la provincia
 # Imagenes en SCRIPTS/SALIDAS_EXPLORACIONES/salidas_estimacion_areas_pequenas:
-#   validacion_qq_fay_herriot.png              graficos Q-Q de los cinco modelos
 #   validacion_linealidad_fay_herriot.png      residuos contra cada variable
 #   validacion_dispersion_residuos_fay_herriot.png  residuos contra valor sintetico
 #   comparacion_directo_fay_herriot.png        directo contra Fay-Herriot (figura 3.2 de Corral et al., 2022, p. 24)
@@ -807,19 +797,6 @@ if (isTRUE(exportar_tabla)) {
                            Provincia_resumen = resumen_provincia,
                            Provincia_detalle = comparacion_provincia),
                       file.path(carpeta_salida, "validacion_fay_herriot.xlsx"))
-  grafico_qq_todos <- diagnosticos_fh %>%
-    select(indicador, `Residuos estandarizados` = residuo_estandarizado,
-           `Efectos de area` = efecto_area) %>%
-    pivot_longer(-indicador, names_to = "componente", values_to = "valor") %>%
-    ggplot(aes(sample = valor)) +
-    stat_qq(colour = "steelblue4", size = 0.7) +
-    stat_qq_line() +
-    facet_wrap(componente ~ indicador, scales = "free_y", ncol = 5) +
-    labs(title = "Normalidad: graficos Q-Q de los cinco modelos Fay-Herriot",
-         x = "Cuantiles teoricos (normal)", y = "Cuantiles observados") +
-    theme_minimal(base_size = 9)
-  ggsave(file.path(carpeta_img, "validacion_qq_fay_herriot.png"), grafico_qq_todos,
-         width = 14, height = 6, dpi = 150)
   # Linealidad: curva suavizada (loess) sobre los residuos
   grafico_linealidad <- linealidad_fh %>%
     mutate(panel = paste(indicador, variable, sep = "\n")) %>%
@@ -885,12 +862,12 @@ if (isTRUE(exportar_tabla)) {
   mostrar_etapa("6.6 Archivos guardados", tibble(
     archivo = c("indicadores_fay_herriot.xlsx", "estimaciones_fay_herriot.xlsx",
                 "comparacion_original_gvf_fay_herriot.xlsx", "validacion_fay_herriot.xlsx",
-                "validacion_qq_fay_herriot.png", "validacion_linealidad_fay_herriot.png",
+                "validacion_linealidad_fay_herriot.png",
                 "validacion_dispersion_residuos_fay_herriot.png",
                 "comparacion_directo_fay_herriot.png", "comparacion_provincia_fay_herriot.png",
                 "comparacion_error_fay_herriot.png"),
     filas = c(nrow(indicadores_fh), nrow(estimadores_fh), nrow(comparacion),
-              nrow(validacion_fh), NA, NA, NA, NA, NA, NA)))
+              nrow(validacion_fh), NA, NA, NA, NA, NA)))
 }
 
 ## 6.7 Tablas de resultados ----
