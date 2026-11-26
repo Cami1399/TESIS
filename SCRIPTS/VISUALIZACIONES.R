@@ -1,7 +1,4 @@
 
-# CV ORIGINAL POR INDICADOR Y ANIO + TABLAS DE MUESTRAS MENORES A 60
-
-
 # 1. LIBRERIAS Y PARAMETROS -----
 
 ## 1.1 Librerias ----
@@ -32,21 +29,15 @@ guardar_png <- function(g, nombre, ancho, alto, dpi = 130, carpeta = carpeta_gra
 # 2. LECTURA Y PREPARACION DE LOS DATOS -----
 ## 2.1 Lectura del Excel ----
 stopifnot(file.exists(ruta_excel))
-# Archivo de SCRIP_ESTIMACION_AREAS_PEQUENAS.R.
-# Sus columnas se renombran a los nombres que usa este script (suavizado = Fay-Herriot).
-est <- read_excel(ruta_excel, sheet = "Comparacion") %>%
-  rename(valor_suavizado_pct = valor_fh_pct,
-         error_suavizado_pp  = error_fh_pp,
-         cv_pct              = cv_original_pct,
-         limite_inferior_pct = limite_inferior_original_pct,
-         limite_superior_pct = limite_superior_original_pct)
+# Archivo de ESTIMACION_AREAS_PEQUENAS_MODELO_FH.R.
+est <- read_excel(ruta_excel, sheet = "Comparacion")
 
 columnas_necesarias <- c("anio", "provincia", "canton", "indicador",
-                         "muestra_denominador", "valor_original_pct",
-                         "error_original_pp", "limite_inferior_pct",
-                         "limite_superior_pct", "error_maximo_tolerable_pp",
-                         "error_gvf_pp", "valor_suavizado_pct",
-                         "error_suavizado_pp", "peso_dato_original")
+                         "muestra_denominador", "theta_dir_pct",
+                         "ee_dir_pp", "ic_inf_dir_pct",
+                         "ic_sup_dir_pct", "error_maximo_tolerable_pp",
+                         "ee_gvf_pp", "theta_fh_pct",
+                         "rmse_fh_pp", "gamma_d")
 stopifnot(all(columnas_necesarias %in% names(est)))
 
 ## 2.2 Etiquetas de indicadores y preparacion ----
@@ -67,9 +58,9 @@ est <- est %>%
 ## 2.3 Resumen de lo leido ----
 print(est %>%
         group_by(Indicador = etiqueta) %>%
-        summarise(`Celdas con valor` = sum(!is.na(valor_original_pct)),
-                  `Sin dato (muestra 0)` = sum(is.na(valor_original_pct) | muestra_denominador == 0, na.rm = TRUE),
-                  `Error original cero` = sum(error_original_pp <= 1e-10, na.rm = TRUE),
+        summarise(`Celdas con valor` = sum(!is.na(theta_dir_pct)),
+                  `Sin dato (muestra 0)` = sum(is.na(theta_dir_pct) | muestra_denominador == 0, na.rm = TRUE),
+                  `Error original cero` = sum(ee_dir_pp <= 1e-10, na.rm = TRUE),
                   `Muestra < 60`     = sum(muestra_denominador > 0 & muestra_denominador < marca_muestra,
                                            na.rm = TRUE),
                   .groups = "drop"))
@@ -85,11 +76,10 @@ base_muestra_baja <- est %>%
          muestra_denominador > 0,
          muestra_denominador < marca_muestra) %>%
   mutate(
-    cv_original_pct  = cv_pct,
-    cv_gvf_pct       = ifelse(valor_original_pct > 0,
-                              error_gvf_pp / valor_original_pct * 100, NA_real_),
-    cv_suavizado_pct = ifelse(valor_suavizado_pct > 0,
-                              error_suavizado_pp / valor_suavizado_pct * 100, NA_real_)) %>%
+    cv_gvf_pct       = ifelse(theta_dir_pct > 0,
+                              ee_gvf_pp / theta_dir_pct * 100, NA_real_),
+    cv_fh_pct = ifelse(theta_fh_pct > 0,
+                              rmse_fh_pp / theta_fh_pct * 100, NA_real_)) %>%
   arrange(etiqueta, provincia, canton, anio)
 
 
@@ -113,12 +103,12 @@ errores_muestra_baja <- base_muestra_baja %>%
             Canton    = canton,
             Anio      = anio,
             Muestra   = muestra_denominador,
-            `Error estándar original (pp)`   = round(error_original_pp, 2),
-            `CV original (%)`                = round(cv_original_pct, 1),
-            `Error estándar con GVF (pp)`    = round(error_gvf_pp, 2),
+            `Error estándar original (pp)`   = round(ee_dir_pp, 2),
+            `CV original (%)`                = round(cv_dir_pct, 1),
+            `Error estándar con GVF (pp)`    = round(ee_gvf_pp, 2),
             `CV con GVF (%)`                 = round(cv_gvf_pct, 1),
-            `Error estándar suavizado (pp)`  = round(error_suavizado_pp, 2),
-            `CV suavizado (%)`               = round(cv_suavizado_pct, 1))
+            `Error estándar suavizado (pp)`  = round(rmse_fh_pp, 2),
+            `CV suavizado (%)`               = round(cv_fh_pct, 1))
 
 print(errores_muestra_baja, n = Inf, width = Inf)
 
@@ -131,9 +121,9 @@ estimaciones_muestra_baja <- base_muestra_baja %>%
             Canton    = canton,
             Anio      = anio,
             Muestra   = muestra_denominador,
-            `Estimación original (%)`  = round(valor_original_pct, 2),
-            `Estimación suavizada (%)` = round(valor_suavizado_pct, 2),
-            `Cambio (pp)`              = round(valor_suavizado_pct - valor_original_pct, 2))
+            `Estimación original (%)`  = round(theta_dir_pct, 2),
+            `Estimación suavizada (%)` = round(theta_fh_pct, 2),
+            `Cambio (pp)`              = round(theta_fh_pct - theta_dir_pct, 2))
 
 print(estimaciones_muestra_baja, n = Inf, width = Inf)
 
@@ -171,16 +161,16 @@ names(relleno_g7) <- names(puntos_g7) <- names(raya_g7) <-
 ## Datos ----
 d8 <- est %>%
   filter(anio %in% anios_referencia, indicador %in% orden_g7,
-         !is.na(valor_original_pct), muestra_denominador > 0) %>%
+         !is.na(theta_dir_pct), muestra_denominador > 0) %>%
   mutate(ind7   = factor(unname(etiquetas_g7[indicador]), levels = unname(etiquetas_g7[orden_g7])),
          rango_muestra = factor(ifelse(muestra_denominador >= marca_muestra, "60 o más", "Menos de 60"),
                                 levels = c("Menos de 60", "60 o más")),
-         error_cero = error_original_pp <= 1e-10,
-         cv_pct_sin_error_cero = ifelse(error_cero, NA_real_, cv_pct),
-         cv_gvf_pct       = ifelse(valor_original_pct > 0, error_gvf_pp / valor_original_pct * 100, NA_real_),
-         cv_suavizado_pct = ifelse(valor_suavizado_pct > 0, error_suavizado_pp / valor_suavizado_pct * 100, NA_real_))
+         error_cero = ee_dir_pp <= 1e-10,
+         cv_pct_sin_error_cero = ifelse(error_cero, NA_real_, cv_dir_pct),
+         cv_gvf_pct       = ifelse(theta_dir_pct > 0, ee_gvf_pp / theta_dir_pct * 100, NA_real_),
+         cv_fh_pct = ifelse(theta_fh_pct > 0, rmse_fh_pp / theta_fh_pct * 100, NA_real_))
 
-limite_orig <- max(d8$cv_pct_sin_error_cero, d8$cv_suavizado_pct, na.rm = TRUE)   # misma escala en las 6 imagenes
+limite_orig <- max(d8$cv_pct_sin_error_cero, d8$cv_fh_pct, na.rm = TRUE)   # misma escala en las 6 imagenes
 n_fuera_gvf <- sum(d8$cv_gvf_pct > limite_orig, na.rm = TRUE)
 
 ## Funcion del grafico ----
@@ -269,12 +259,12 @@ guardar_png(g4, "4_cv_gvf_panel_anios.png", 26, 9, dpi = 200)
 
 # CV SUAVIZADO (despues de areas pequenas): general y panel por anio -----
 
-g5 <- grafico_cv_muestra(d8, "cv_suavizado_pct",
+g5 <- grafico_cv_muestra(d8, "cv_fh_pct",
                          "CV Fay-Herriot según el tamaño de muestra, por indicador",
                          "Coeficiente de variación Fay-Herriot (CV %)", nota_d, limite_orig, solo_general = TRUE)
 guardar_png(g5, "5_cv_suavizado_general.png", 11, 6.2, dpi = 200)
 
-g6 <- grafico_cv_muestra(d8, "cv_suavizado_pct",
+g6 <- grafico_cv_muestra(d8, "cv_fh_pct",
                          "CV Fay-Herriot según el tamaño de muestra, por indicador y año",
                          "Coeficiente de variación Fay-Herriot (CV %)", nota_d, limite_orig)
 guardar_png(g6, "6_cv_suavizado_panel_anios.png", 26, 9, dpi = 200)
@@ -290,10 +280,10 @@ max_seguro <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
 base_saltos <- est %>%
   arrange(provincia, canton, indicador, anio) %>%
   group_by(provincia, canton, indicador) %>%
-  mutate(salto_original  = abs(valor_original_pct  - lag(valor_original_pct)),
-         salto_suavizado = abs(valor_suavizado_pct - lag(valor_suavizado_pct)),
-         sin_dato   = is.na(valor_original_pct),
-         error_cero = !is.na(error_original_pp) & error_original_pp <= 1e-10) %>%
+  mutate(salto_original  = abs(theta_dir_pct  - lag(theta_dir_pct)),
+         salto_suavizado = abs(theta_fh_pct - lag(theta_fh_pct)),
+         sin_dato   = is.na(theta_dir_pct),
+         error_cero = !is.na(ee_dir_pp) & ee_dir_pp <= 1e-10) %>%
   ungroup()
 
 
@@ -326,9 +316,9 @@ print(paste("Ejemplo 1:", canton_saltos, "-", provincia_saltos))
 tabla_saltos_canton <- base_saltos %>%
   filter(canton == canton_saltos, provincia == provincia_saltos) %>%
   transmute(Indicador = etiqueta, Anio = anio, Muestra = muestra_denominador,
-            `Estimación original (%)`  = round(valor_original_pct, 2),
+            `Estimación original (%)`  = round(theta_dir_pct, 2),
             `Salto original (pp)`      = round(salto_original, 2),
-            `Estimación suavizada (%)` = round(valor_suavizado_pct, 2),
+            `Estimación suavizada (%)` = round(theta_fh_pct, 2),
             `Salto suavizado (pp)`     = round(salto_suavizado, 2)) %>%
   arrange(Indicador, Anio)
 print(tabla_saltos_canton, n = Inf, width = Inf)
@@ -337,7 +327,7 @@ print(tabla_saltos_canton, n = Inf, width = Inf)
 datos_saltos_largo <- base_saltos %>%
   filter(canton == canton_saltos, provincia == provincia_saltos) %>%
   select(etiqueta, anio, muestra_denominador,
-         Original = valor_original_pct, `Fay-Herriot` = valor_suavizado_pct) %>%
+         Original = theta_dir_pct, `Fay-Herriot` = theta_fh_pct) %>%
   pivot_longer(c(Original, `Fay-Herriot`), names_to = "etapa", values_to = "valor") %>%
   mutate(etapa = factor(etapa, levels = c("Original", "Fay-Herriot")))
 
@@ -399,7 +389,7 @@ diagnostico_cantones <- base_saltos %>%
   summarise(datos_validos     = sum(!sin_dato),
             con_NA            = sum(sin_dato),
             errores_cero      = sum(error_cero),
-            ceros_exactos     = sum(valor_original_pct == 0, na.rm = TRUE),
+            ceros_exactos     = sum(theta_dir_pct == 0, na.rm = TRUE),
             muestra_minima    = suppressWarnings(min(muestra_denominador, na.rm = TRUE)),
             .groups = "drop")
 
@@ -447,10 +437,10 @@ print(diagnostico_canton, width = Inf)
 tabla_saltos_canton <- base_saltos %>%
   filter(canton == canton_saltos, provincia == provincia_saltos) %>%
   transmute(Indicador = etiqueta, Anio = anio, Muestra = muestra_denominador,
-            `Estimación original (%)`  = round(valor_original_pct, 2),
+            `Estimación original (%)`  = round(theta_dir_pct, 2),
             `Error original cero`      = ifelse(error_cero, "Sí", "No"),
             `Salto original (pp)`      = round(salto_original, 2),
-            `Estimación suavizada (%)` = round(valor_suavizado_pct, 2),
+            `Estimación suavizada (%)` = round(theta_fh_pct, 2),
             `Salto suavizado (pp)`     = round(salto_suavizado, 2)) %>%
   arrange(Indicador, Anio)
 print(tabla_saltos_canton, n = Inf, width = Inf)
@@ -460,7 +450,7 @@ print(tabla_saltos_canton, n = Inf, width = Inf)
 datos_saltos_largo <- base_saltos %>%
   filter(canton == canton_saltos, provincia == provincia_saltos) %>%
   select(etiqueta, anio, muestra_denominador, error_cero,
-         Original = valor_original_pct, `Fay-Herriot` = valor_suavizado_pct) %>%
+         Original = theta_dir_pct, `Fay-Herriot` = theta_fh_pct) %>%
   pivot_longer(c(Original, `Fay-Herriot`), names_to = "etapa", values_to = "valor") %>%
   mutate(etapa = factor(etapa, levels = c("Original", "Fay-Herriot")),
          cero_no_estimable = (etapa == "Original") & error_cero)
@@ -520,12 +510,12 @@ guardar_png(g_saltos_ambos, "ejemplo_2_saltos_ambos.png", 11, 7, dpi = 200)
 
 ## 1) Ranking de estabilidad: donde el suavizado cambia menos ----
 ranking_estables <- base_saltos %>%
-  mutate(cambio_abs = abs(valor_suavizado_pct - valor_original_pct)) %>%
+  mutate(cambio_abs = abs(theta_fh_pct - theta_dir_pct)) %>%
   group_by(provincia, canton) %>%
   summarise(muestra_minima    = suppressWarnings(min(muestra_denominador, na.rm = TRUE)),
             muestra_mediana   = median(muestra_denominador, na.rm = TRUE),
-            cv_mediano        = median(cv_pct, na.rm = TRUE),
-            peso_original_med = mean(peso_dato_original, na.rm = TRUE),
+            cv_mediano        = median(cv_dir_pct, na.rm = TRUE),
+            gamma_d_media = mean(gamma_d, na.rm = TRUE),
             cambio_abs_medio  = mean(cambio_abs, na.rm = TRUE),
             cambio_abs_max    = max_seguro(cambio_abs),
             .groups = "drop") %>%
@@ -537,7 +527,7 @@ ranking_estables <- base_saltos %>%
             `Muestra mínima`            = muestra_minima,
             `Muestra mediana`           = muestra_mediana,
             `CV mediano (%)`            = round(cv_mediano, 1),
-            `Peso del dato original`    = round(peso_original_med, 2),
+            `Peso del dato original`    = round(gamma_d_media, 2),
             `Cambio absoluto medio (pp)` = round(cambio_abs_medio, 2),
             `Cambio absoluto máximo (pp)` = round(cambio_abs_max, 2))
 
@@ -560,11 +550,11 @@ print(diagnostico_cantones %>%
 tabla_estable <- base_saltos %>%
   filter(canton == canton_estable, provincia == provincia_estable) %>%
   transmute(Indicador = etiqueta, Anio = anio, Muestra = muestra_denominador,
-            `CV original (%)`          = round(cv_pct, 1),
-            `Estimación original (%)`  = round(valor_original_pct, 2),
-            `Estimación suavizada (%)` = round(valor_suavizado_pct, 2),
-            `Cambio por suavizado (pp)` = round(valor_suavizado_pct - valor_original_pct, 2),
-            `Peso del dato original`   = round(peso_dato_original, 2),
+            `CV original (%)`          = round(cv_dir_pct, 1),
+            `Estimación original (%)`  = round(theta_dir_pct, 2),
+            `Estimación suavizada (%)` = round(theta_fh_pct, 2),
+            `Cambio por suavizado (pp)` = round(theta_fh_pct - theta_dir_pct, 2),
+            `Peso del dato original`   = round(gamma_d, 2),
             `Salto original (pp)`      = round(salto_original, 2),
             `Salto suavizado (pp)`     = round(salto_suavizado, 2)) %>%
   arrange(Indicador, Anio)
@@ -577,10 +567,10 @@ comparar_cantones <- function(canton, provincia, nombre) {
     filter(canton == !!canton, provincia == !!provincia) %>%
     summarise(Canton = nombre,
               `Muestra mediana`            = median(muestra_denominador, na.rm = TRUE),
-              `CV original mediano (%)`    = round(median(cv_pct, na.rm = TRUE), 1),
-              `Peso medio del dato original` = round(mean(peso_dato_original, na.rm = TRUE), 2),
-              `Cambio absoluto medio (pp)` = round(mean(abs(valor_suavizado_pct - valor_original_pct), na.rm = TRUE), 2),
-              `Cambio absoluto máximo (pp)` = round(max(abs(valor_suavizado_pct - valor_original_pct), na.rm = TRUE), 2))
+              `CV original mediano (%)`    = round(median(cv_dir_pct, na.rm = TRUE), 1),
+              `Peso medio del dato original` = round(mean(gamma_d, na.rm = TRUE), 2),
+              `Cambio absoluto medio (pp)` = round(mean(abs(theta_fh_pct - theta_dir_pct), na.rm = TRUE), 2),
+              `Cambio absoluto máximo (pp)` = round(max(abs(theta_fh_pct - theta_dir_pct), na.rm = TRUE), 2))
 }
 
 tabla_comparacion <- bind_rows(
@@ -593,7 +583,7 @@ print(tabla_comparacion, width = Inf)
 datos_estable_largo <- base_saltos %>%
   filter(canton == canton_estable, provincia == provincia_estable) %>%
   select(etiqueta, anio, muestra_denominador,
-         Original = valor_original_pct, `Fay-Herriot` = valor_suavizado_pct) %>%
+         Original = theta_dir_pct, `Fay-Herriot` = theta_fh_pct) %>%
   pivot_longer(c(Original, `Fay-Herriot`), names_to = "etapa", values_to = "valor") %>%
   mutate(etapa = factor(etapa, levels = c("Original", "Fay-Herriot")))
 
@@ -673,15 +663,15 @@ datos_fig <- est %>%
                         labels = c(paste0("ALTA DENSIDAD MUESTRAL\n(", canton_alta, ")"),
                                    paste0("BAJA DENSIDAD MUESTRAL\n(", canton_baja, ")"))),
          ind = factor(unname(etiquetas_fig[indicador]), levels = unname(etiquetas_fig)),
-         cv_original = ifelse(error_original_pp <= 1e-10, NA_real_, cv_pct))
+         cv_original = ifelse(ee_dir_pp <= 1e-10, NA_real_, cv_dir_pct))
 
 stopifnot(nrow(datos_fig) == 10)   # 2 cantones x 5 indicadores
 
 tabla_fig <- datos_fig %>%
   arrange(grupo, ind) %>%
   transmute(Canton = canton, Indicador = ind, Muestra = muestra_denominador,
-            `Valor original (%)` = round(valor_original_pct, 2),
-            `Error estándar (pp)` = round(error_original_pp, 2),
+            `Valor original (%)` = round(theta_dir_pct, 2),
+            `Error estándar (pp)` = round(ee_dir_pp, 2),
             `CV original (%)`    = round(cv_original, 1))
 print(tabla_fig, n = Inf, width = Inf)
 
@@ -759,10 +749,10 @@ cv30 <- read_excel(ruta_excel, sheet = "Comparacion", guess_max = 5000) %>%
       monoparental_jefatura_aproximacion = "Monoparentalidad",
       inasistencia_12_17 = "Inasistencia",
       desempleo_general = "Desempleo")[indicador]),
-    grupo = case_when(is.na(valor_original_pct) ~ "Sin muestra",
-                      valor_original_pct == 0   ~ "Dato directo 0 %",
+    grupo = case_when(is.na(theta_dir_pct) ~ "Sin muestra",
+                      theta_dir_pct == 0   ~ "Dato directo 0 %",
                       TRUE                      ~ "Dato mayor que 0"),
-    confiable = coalesce(cumple_muestra & cumple_gl & error_original_pp > 1e-10, FALSE))
+    confiable = coalesce(cumple_muestra & cumple_gl & ee_dir_pp > 1e-10, FALSE))
 cv30_dato <- filter(cv30, grupo == "Dato mayor que 0")
 
 # Agrega una fila con el total de los cinco indicadores
@@ -773,7 +763,7 @@ con_total <- function(d, f) {
 # Tabla 1. Los tres pasos, en las mismas areas (dato directo mayor que 0)
 cv30_pasos <- con_total(cv30_dato, \(x) summarise(x,
   areas = n(),
-  original = sum(cv_original_pct > 30), gvf = sum(cv_gvf_pct > 30),
+  original = sum(cv_dir_pct > 30), gvf = sum(cv_gvf_pct > 30),
   fay_herriot = sum(cv_fh_pct > 30), .groups = "drop")) %>%
   mutate(original_pct = round(100 * original / areas, 1),
          gvf_pct = round(100 * gvf / areas, 1),
@@ -782,10 +772,10 @@ cv30_pasos <- con_total(cv30_dato, \(x) summarise(x,
 # Tabla 2. El CV original por dentro: cuales son confiables de verdad
 cv30_original <- con_total(cv30, \(x) summarise(x,
   total = n(),
-  confiable_cv_hasta_30 = sum(confiable & grupo == "Dato mayor que 0" & cv_original_pct <= 30, na.rm = TRUE),
-  confiable_cv_mayor_30 = sum(confiable & grupo == "Dato mayor que 0" & cv_original_pct > 30, na.rm = TRUE),
-  no_confiable_cv_hasta_30 = sum(!confiable & grupo == "Dato mayor que 0" & cv_original_pct <= 30, na.rm = TRUE),
-  no_confiable_cv_mayor_30 = sum(!confiable & grupo == "Dato mayor que 0" & cv_original_pct > 30, na.rm = TRUE),
+  confiable_cv_hasta_30 = sum(confiable & grupo == "Dato mayor que 0" & cv_dir_pct <= 30, na.rm = TRUE),
+  confiable_cv_mayor_30 = sum(confiable & grupo == "Dato mayor que 0" & cv_dir_pct > 30, na.rm = TRUE),
+  no_confiable_cv_hasta_30 = sum(!confiable & grupo == "Dato mayor que 0" & cv_dir_pct <= 30, na.rm = TRUE),
+  no_confiable_cv_mayor_30 = sum(!confiable & grupo == "Dato mayor que 0" & cv_dir_pct > 30, na.rm = TRUE),
   dato_0 = sum(grupo == "Dato directo 0 %"),
   sin_muestra = sum(grupo == "Sin muestra"), .groups = "drop"))
 
@@ -807,15 +797,15 @@ cv30_anio <- cv30 %>%
 cv30_lista <- cv30 %>%
   filter(cv_fh_pct > 30) %>%
   transmute(Indicador, provincia, canton, anio, grupo, muestra_denominador, grados_libertad,
-            valor_original_pct, cv_original_pct, cv_gvf_pct, valor_fh_pct, error_fh_pp, cv_fh_pct) %>%
+            theta_dir_pct, cv_dir_pct, cv_gvf_pct, theta_fh_pct, rmse_fh_pp, cv_fh_pct) %>%
   arrange(Indicador, desc(cv_fh_pct))
 
 # Tabla 6. El CV original por dentro: por que no es confiable
 # Cada caso se cuenta una sola vez, en el primer motivo que cumple.
 cv30_motivo <- cv30_dato %>%
-  mutate(cv_original = if_else(cv_original_pct <= 30, "CV hasta 30 %", "CV mayor a 30 %"),
+  mutate(cv_original = if_else(cv_dir_pct <= 30, "CV hasta 30 %", "CV mayor a 30 %"),
          motivo = case_when(
-           error_original_pp <= 1e-10 ~ "error_0",
+           ee_dir_pp <= 1e-10 ~ "error_0",
            muestra_denominador < 60 ~ "muestra_menor_60",
            grados_libertad < 9 ~ "gl_menor_9",
            TRUE ~ "cumple_todo"))
@@ -836,7 +826,7 @@ cv30_motivo_tabla <- bind_rows(
 cv30_incumple <- cv30_motivo %>%
   group_by(cv_original) %>%
   summarise(casos = n(),
-            con_error_0 = sum(error_original_pp <= 1e-10),
+            con_error_0 = sum(ee_dir_pp <= 1e-10),
             con_muestra_menor_60 = sum(muestra_denominador < 60),
             con_gl_menor_9 = sum(grados_libertad < 9),
             con_muestra_y_gl = sum(muestra_denominador < 60 & grados_libertad < 9),
@@ -854,13 +844,13 @@ cv30_tramo <- cv30 %>%
 resumir_aporte <- function(d) {
   summarise(d, casos = n(),
             con_dato_mayor_0 = sum(grupo == "Dato mayor que 0"),
-            original_mayor_30 = sum(cv_original_pct > 30 & grupo == "Dato mayor que 0", na.rm = TRUE),
+            original_mayor_30 = sum(cv_dir_pct > 30 & grupo == "Dato mayor que 0", na.rm = TRUE),
             gvf_mayor_30 = sum(cv_gvf_pct > 30 & grupo == "Dato mayor que 0", na.rm = TRUE),
             fh_mayor_30_con_dato = sum(cv_fh_pct > 30 & grupo == "Dato mayor que 0"),
             fh_mayor_30_todos = sum(cv_fh_pct > 30),
-            error_gvf_mediana_pp = round(median(error_gvf_pp, na.rm = TRUE), 2),
-            error_fh_mediana_pp = round(median(error_fh_pp), 2),
-            peso_encuesta_mediana = round(median(peso_dato_original), 2), .groups = "drop")
+            ee_gvf_mediana_pp = round(median(ee_gvf_pp, na.rm = TRUE), 2),
+            rmse_fh_mediana_pp = round(median(rmse_fh_pp), 2),
+            gamma_d_mediana = round(median(gamma_d), 2), .groups = "drop")
 }
 cv30_aporte <- cv30_tramo %>% group_by(Tramo) %>% resumir_aporte()
 cv30_aporte_indicador <- cv30_tramo %>% group_by(Indicador, Tramo) %>% resumir_aporte()
@@ -949,8 +939,8 @@ tabla_imagen(
                             `Original > 30 %` = original_mayor_30, `GVF > 30 %` = gvf_mayor_30,
                             `Fay-Herriot > 30 % (dato > 0)` = fh_mayor_30_con_dato,
                             `Fay-Herriot > 30 % (todos)` = fh_mayor_30_todos,
-                            `Error GVF (pp)` = error_gvf_mediana_pp, `Error Fay-Herriot (pp)` = error_fh_mediana_pp,
-                            `Peso de la encuesta` = peso_encuesta_mediana),
+                            `Error GVF (pp)` = ee_gvf_mediana_pp, `Error Fay-Herriot (pp)` = rmse_fh_mediana_pp,
+                            `Peso de la encuesta` = gamma_d_mediana),
   "Aporte del modelo según el tamaño de muestra", "tabla_7_aporte_muestra.png", 12.5,
   "Errores y peso: medianas. Los cinco indicadores juntos.")
 tabla_imagen(
@@ -958,8 +948,8 @@ tabla_imagen(
                             `Original > 30 %` = original_mayor_30, `GVF > 30 %` = gvf_mayor_30,
                             `Fay-Herriot > 30 % (dato > 0)` = fh_mayor_30_con_dato,
                             `Fay-Herriot > 30 % (todos)` = fh_mayor_30_todos,
-                            `Error GVF (pp)` = error_gvf_mediana_pp, `Error Fay-Herriot (pp)` = error_fh_mediana_pp,
-                            `Peso de la encuesta` = peso_encuesta_mediana),
+                            `Error GVF (pp)` = ee_gvf_mediana_pp, `Error Fay-Herriot (pp)` = rmse_fh_mediana_pp,
+                            `Peso de la encuesta` = gamma_d_mediana),
   "Aporte del modelo según el tamaño de muestra, por indicador", "tabla_8_aporte_muestra_indicador.png", 12.5,
   "Errores y peso: medianas.")
 # Tabla 9. Casos de la encuesta evaluados por indicador y anio
@@ -993,10 +983,10 @@ tabla_imagen(
 # Solo canton-anio con muestra. El error original de cero no es precision.
 tabla_imagen(
   cv30_tramo %>% filter(n_registros > 0) %>% group_by(Tramo) %>%
-    summarise(casos = n(), cero = sum(error_original_pp <= 1e-10),
-              original = round(median(error_original_pp), 2),
-              gvf = round(median(error_gvf_pp), 2),
-              sube = sum(error_gvf_pp > error_original_pp), .groups = "drop") %>%
+    summarise(casos = n(), cero = sum(ee_dir_pp <= 1e-10),
+              original = round(median(ee_dir_pp), 2),
+              gvf = round(median(ee_gvf_pp), 2),
+              sube = sum(ee_gvf_pp > ee_dir_pp), .groups = "drop") %>%
     transmute(Registros = as.character(Tramo), Casos = casos, `Con error original de cero` = cero,
               `Error original (pp)` = original, `Error GVF (pp)` = gvf,
               `Casos en que la GVF es mayor` = sube),
