@@ -4,13 +4,6 @@
 # Las funciones sin prefijo enemdu_ son adaptaciones propias.
 # Construye los indicadores originales (estimaciones directas) con los pesos originales de la ENEMDU y marca su precision con los criterios del INEC.
 # Salidas: construccion_indicadores_factores.xlsx y estimaciones_originales.xlsx;
-# objeto en R: estimadores.
-# Orden de los scripts de la tesis:
-#   1. INDICADORES.R                          -> estimaciones directas (este script)
-#   2. SCRIP_VARIABLES_AUXILIARES.R           -> variables auxiliares
-#   3. SCRIP_ESTIMACION_AREAS_PEQUENAS.R      -> varianza, seleccion de variables, Fay-Herriot y validacion
-#   4. VISUSALIZACION.R                       -> graficos y tablas
-# Para cambiar anios: definir anios_panel antes de source().
 
 # Salidas de seguimiento: solo consola; no altera ni filtra datos.
 mostrar_etapa <- function(titulo, tabla = NULL) {
