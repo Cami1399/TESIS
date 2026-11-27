@@ -1,15 +1,7 @@
 # VARIABLES AUXILIARES PARA EL MODELO FAY-HERRIOT CANTONAL
 # Documento: Construccion_variables_auxiliares.docx
 # Ambito: 86 cantones de las 7 provincias de la Costa, anios 2021-2025
-#
-# Cada variable se guarda como un objeto con las columnas:
-# anio, codigo_provincia, provincia, codigo_canton, canton, numerador, denominador, valor
-#
-# Organizacion: una seccion principal por fuente de datos.
-#   Niveles de titulo (ver con Ctrl + Shift + O en RStudio):
-#   #   = titulo principal (seccion)
-#   ##  = subtitulo
-#   ### = sub-subtitulo
+
 
 
 # 0. PAQUETES, LIBRERIAS Y PARAMETROS COMUNES -----------------------------

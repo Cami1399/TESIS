@@ -1,13 +1,6 @@
 ## LIMPIEZA DE DATOS - DETENIDOS/APREHENDIDOS PM ----
 # Fuente: Ministerio del Interior, detenidos/aprehendidos PM 2019-2025.
 # Poblacion de analisis: adolescentes (12-17 anios), region Costa, 2021-2025.
-#
-# ESTRUCTURA DEL SCRIPT
-#   SECCION 1: Filtrado secuencial (anio -> edad -> provincias de la Costa)
-#   SECCION 2: Exploracion inicial (categorias, graficos, diagnostico)
-#   SECCION 3: Clasificacion y transformacion previa de tipos de dato
-#   SECCION 4: Limpieza (texto, faltantes, formatos, repetidas, factores)
-#   SECCION 5: Verificacion final de tipos
 
 
 # ============================================================ #

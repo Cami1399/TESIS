@@ -1,7 +1,5 @@
 # ============================================================================
 # DATA MAESTRA: UNION DE FACTORES LIMPIOS, POBLACION Y CONTEO
-# Ejecutar despues de 01_Construccion_Indicadores.R.
-# No lee microdatos, no recalcula indicadores ni estimadores.
 # ============================================================================
 # Salidas de seguimiento: solo consola; no altera ni filtra datos.
 mostrar_etapa <- function(titulo, tabla = NULL) {
