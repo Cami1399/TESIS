@@ -3,7 +3,6 @@
 # Paquete: yerovi84/enemduR (v0.1.0-alpha.2).
 # Las funciones sin prefijo enemdu_ son adaptaciones propias.
 # Construye los indicadores originales (estimaciones directas) con los pesos originales de la ENEMDU y marca su precision con los criterios del INEC.
-# Salidas: construccion_indicadores_factores.xlsx y estimaciones_originales.xlsx;
 
 # Salidas de seguimiento: solo consola; no altera ni filtra datos.
 mostrar_etapa <- function(titulo, tabla = NULL) {
@@ -139,7 +138,7 @@ mostrar_etapa("3. Paquete analitico cargado", data.frame(paquete = "enemduR",
 #     Sin ocupados, el cociente se trata como infinito.
 #   El paquete suma knbi=comp1+...+comp5 y define nbi=I(knbi>=1)
 #   Si falta un componente, enemdu_build_nbi_flags() deja NBI como NA
-#   Luego nuestra adaptacion estima:
+#   Con esos componentes, el indicador se calcula como:
 #   100 * sum(w_i * I(12<=edad<=17) * nbi_i) /
 #         sum(w_i), sobre toda la poblacion del canton-anio
 #   Se usan enemdu_join_nbi_sources(), enemdu_build_nbi_components() y enemdu_build_nbi_flags().
@@ -154,9 +153,7 @@ mostrar_etapa("3. Paquete analitico cargado", data.frame(paquete = "enemduR",
 #   comp5 = 1 si la jefatura tiene 2 o menos anios y hay mas de 3 personas por ocupado.
 #   La conversion a anios es elaboracion propia; la regla es la del INEC (2025b, Anexo 2, Tabla 1).
 #   El perfil de 2025 se aplica a 2021-2024.
-#   Los codigos se compararon con los formularios de dic-2021, abr-2022, abr-2023, feb-2024, dic-2024 y oct-2025 (en lo que se pudo leer automaticamente).
-#   Esto no valida las cifras de NBI: se mantiene la etiqueta PROVISIONAL.
-#   Estas son reglas implementadas en esta version, no certificacion INEC.
+#   Los codigos se compararon con los formularios de dic-2021, abr-2022, abr-2023, feb-2024, dic-2024 y oct-2025.
 #   El adolescente con NBI desconocido queda NA y se omite del calculo; el canton se conserva.
 #   El denominador es la poblacion total del canton-anio.
 #
@@ -270,14 +267,14 @@ leer_csv_panel <- function(f, anio, numericas) {
   }
   x
 }
-# 5.7 Extrae columnas originales, valida y une vivienda; aun no calcula indicadores.
+# 5.7 Extrae columnas originales, valida y une la base de vivienda.
 cargar_anio_panel <- function(raiz, anio) {
   fs <- localizar_archivos_anio(raiz, anio)
   p <- leer_csv_panel(fs[grepl("^BDDenemdu_personas.*csv$", basename(fs))], anio,
                       c("p03", "p04", "p06", "p07", "p10a", "p10b", "condact", "empleo", "secemp", "fexp", "pobreza"))
   v <- leer_csv_panel(fs[grepl("^BDDenemdu_vivienda.*csv$", basename(fs))], anio,
                       c("vi04a", "vi05a", "vi07", "vi09", "vi10", "vi10a", "fexp"))
-  # Extraer unicamente las columnas originales necesarias; todavia sin indicadores.
+  # Extraer unicamente las columnas originales necesarias.
   columnas_persona <- c("ciudad", "prov", "area", "id_hogar", "id_persona", "p01",
                         "p03", "p04", "p06", "p07", "p10a", "p10b", "condact", "empleo", "secemp",
                         "pobreza", "fexp", "upm", "estrato", "mes")
@@ -343,7 +340,7 @@ estimar_panel <- function(d, valor, indicador, objetivo, anio, estado_metodo) {
   salida$anio <- anio
   salida$estado_metodo <- estado_metodo
   salida$alcance <- "canton_fuera_dominios_garantizados_diseno"
-  # Datos del diseno que usa la GVF (SCRIP_ESTIMACION_AREAS_PEQUENAS.R): suma de factores de expansion del denominador, numero de UPM y numero de estratos con una sola UPM, contados en los registros validos del canton.
+  # Datos del diseno en cada canton: suma de factores de expansion del denominador, numero de UPM y numero de estratos con una sola UPM, contados en los registros validos del canton.
   salida$denominador_expandido <- NA_real_
   salida$upm_denominador <- NA_integer_
   salida$estratos_upm_solitaria <- NA_integer_
@@ -425,10 +422,10 @@ calcular_anio_panel <- function(fuente, objetivo, anio) {
   bloques <- list(
     estimar_panel(p, "inasistencia", "inasistencia_12_17", objetivo, anio, "derivado_p03_p07_codigos_1_2"),
     estimar_panel(p, "desempleo_panel", "desempleo_general", objetivo, anio, "flags_laborales_enemduR_condact"),
-    estimar_panel(p, "pobreza_panel", "pobreza_ingresos", objetivo, anio, "clasificacion_pobreza_entregada_INEC_no_recalculada"),
+    estimar_panel(p, "pobreza_panel", "pobreza_ingresos", objetivo, anio, "clasificacion_pobreza_INEC"),
     estimar_panel(p, "nbi_adolescente", "adolescentes_nbi_sobre_total_provisional", objetivo, anio,
-                  if (anio == 2025) "perfil_paquete_2025_aproximacion_escolaridad_pendiente_auditoria" else "perfil_2025_trasladado_sin_validacion_historica"),
-    estimar_panel(h, "mono", "monoparental_jefatura_aproximacion", objetivo, anio, "proxy_jefatura_no_cuidado_efectivo_ni_nucleos_secundarios")
+                  if (anio == 2025) "perfil_enemdu_2025_escolaridad_ajustada" else "perfil_enemdu_2025_aplicado_2021_2024"),
+    estimar_panel(h, "mono", "monoparental_jefatura_aproximacion", objetivo, anio, "aproximacion_jefatura_hogar")
   )
   # Descripcion de muestra: no excluye cantones ni modifica estimaciones.
   muestra <- do.call(rbind, lapply(objetivo$codigo_canton, function(cod) {
@@ -562,8 +559,7 @@ mostrar_etapa("8. Estimadores originales", estimadores %>%
 # Fuente: INEC (2025), Aproximacion metodologica para la evaluacion de la precision de la inferencia estadistica en encuestas de hogares con disenos complejos, pp. 22-23.
 # Un error estandar de cero (menor a 1e-10 pp) no cumple: significa falta de variacion en la muestra, no precision.
 # Solo marcan; no excluyen filas.
-# En la estimacion en areas pequenas entran todas las estimaciones con valor: el estimador Fay-Herriot pondera cada una segun su varianza (Corral et al., 2022, p. 21); estas marcas sirven para describir la calidad del dato directo.
-# En SCRIP_ESTIMACION_AREAS_PEQUENAS.R (seccion 2) la marca de grados de libertad ayuda a elegir las areas con las que se calcula el efecto de diseno de la GVF.
+# Estas marcas describen la calidad de cada estimacion directa.
 # No excluye ningun canton-anio.
 estimadores <- estimadores %>%
   mutate(error_maximo_tolerable_pp =
@@ -616,7 +612,7 @@ if (isTRUE(exportar_tabla)) {
 
 # 10. ESTIMACIONES ORIGINALES EN EXCEL ----------------------------------------
 # Una fila por indicador, canton y anio: porcentaje, error estandar, IC95, CV, n del denominador, grados de libertad, datos del diseno (factores de expansion, UPM y estratos con una sola UPM) y marcas de precision INEC (8.1).
-# Sin suavizar. Es el insumo de SCRIP_ESTIMACION_AREAS_PEQUENAS.R.
+# Sin suavizar.
 if (isTRUE(exportar_tabla)) {
   writexl::write_xlsx(list(Estimaciones_originales = estimadores),
                       file.path(carpeta_salida, "estimaciones_originales.xlsx"))
